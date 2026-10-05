@@ -1,5 +1,17 @@
 ## `did:vh` DID Method Specification
 
+### Conformance
+
+As well as sections marked as non-normative, all examples, notes, and
+informative checklists in this specification are non-normative. Everything
+else in this specification is normative.
+
+The key words **MAY**, **MUST**, **MUST NOT**, **NOT REQUIRED**,
+**RECOMMENDED**, **REQUIRED**, **SHOULD**, and **SHOULD NOT** in this
+specification are to be interpreted as described in BCP 14 [[spec:RFC2119]]
+[[spec:RFC8174]] when, and only when, they appear in all capitals, as shown
+here.
+
 ### Relationship to VH-Log and `did:webvh`
 
 `did:vh` is a [[ref: specialisation]] of the [[ref: VH-Log]] specification.
@@ -314,6 +326,12 @@ publishing at a web location at any time, and the [[ref: DID Log]] found
 through any `src` reference may not be the latest. Because `src` is not part
 of the DID, the DID does not change when the log is stored elsewhere.
 
+A `src` reference also says nothing about who controls the DID: a
+[[ref: DID Controller]] can publish a log at any location it can write to,
+and anyone can put any `src` value in a DID URL. [[ref: Resolvers]] and their
+clients **MUST NOT** treat a `src` reference as evidence of an association
+between the DID and the owner of the location.
+
 ::: note
 The `did:scid` `src` parameter can also name a DID method that stores the
 verification data (for example, a DID-Linked Resource on a ledger). This
@@ -362,11 +380,18 @@ To retrieve the [[ref: DID Log]] from a web location, the [[ref: Resolver]]
 2. If the URL has no path, append `/.well-known/did.jsonl`. Otherwise, append
    `/did.jsonl`.
 3. Retrieve the [[ref: DID Log]] with an HTTP `GET` (HTTPS for an `https`
-   reference), following the transport requirements in [Security
-   Considerations](#security-considerations).
+   reference), following the transport requirements below.
 4. If the active [[ref: parameters]] require [[ref: witnesses]], retrieve the
    witness proofs file from the same URL with the final `did.jsonl` replaced by
    `did-witness.json`.
+
+When retrieving from a web location, a [[ref: Resolver]] **MUST** meet the
+requirements of VH-Log's [Retrieving Log
+Resources](../next/index.html#retrieving-log-resources) section, which
+include HTTPS with server authentication, no automatic redirects, and
+rejection of IP literals and private addresses. The only exception is a
+loopback reference, for which the requirements to use HTTPS and to reject
+loopback hosts do not apply.
 
 This is the same layout as `did:webvh`, so a web location reference names the
 same location as the domain and path of a `did:webvh` DID:
@@ -437,9 +462,8 @@ and `ipfs` URLs naming an IPFS directory. For such a reference:
 - A [[ref: Resolver]] that does not support the scheme **MUST** return the
   `featureNotSupported` error.
 - A [[ref: Resolver]] **MUST** apply to the retrieval protections equivalent
-  to those required for web locations in [Security
-  Considerations](#security-considerations), including those for any gateway
-  it uses to reach the scheme's network.
+  to those required for [web locations](#web-locations), including to any
+  gateway it uses to reach the scheme's network.
 
 ::: example
 
@@ -639,6 +663,35 @@ Updating a `did:vh` DID follows the Update algorithm defined in
   previously made the log available: updating each web location, notifying
   [[ref: watchers]] (see [Watchers](#watchers)), and sending it to peers.
 
+##### Applying Peer-to-Peer Updates
+
+When [[ref: DID Logs]] are exchanged [peer-to-peer](#peer-to-peer-exchange),
+each party holds the only copies of the other's log, and an update may carry
+only the new entries. A party that receives new [[ref: DID log entries]] for a
+[[ref: DID Log]] it holds **MUST** apply them as follows:
+
+1. Skip any received entry whose `versionId` is identical to that of an entry
+   it already holds. If a received entry has the same version number as a held
+   entry but a different `versionId`, the update is duplicitous and **MUST**
+   be rejected.
+2. Append the remaining entries, in order, to a copy of the held
+   [[ref: DID Log]].
+3. Resolve the DID with that copy as `didLog`, the received witness proofs
+   file (or, if none was received, the held one) as `didWitness`, and the
+   `versionId` of the last appended entry as `versionId`.
+4. If resolution succeeds, replace the held [[ref: DID Log]] and witness proofs
+   file with the ones used in step 3. Otherwise, reject the update and keep the
+   held files unchanged.
+
+A party **SHOULD** keep a rejected update as evidence of duplicity.
+
+No second copy of the log is needed to detect an update that does not extend
+the held log. The [[ref: entry hash]] of each entry is calculated with the
+`versionId` of the previous entry as input, so an appended entry verifies only
+if it continues from the last held entry. Requesting the `versionId` of the
+last appended entry in step 3 ensures that resolution fails, rather than
+returning an earlier version, if any appended entry is invalid.
+
 #### Deactivate (Revoke)
 
 A `did:vh` DID is deactivated as defined in [[ref: VH-Log]]'s
@@ -747,28 +800,11 @@ entry must be [[ref: witnessed]], the [[ref: DID Controller]] also sends the
 complete current witness proofs file; otherwise that is optional. The
 protocol used to send updates is outside the scope of this specification.
 
-**Applying an update.** A party receiving new entries applies them as follows,
-as required by [Peer-to-Peer Use](#peer-to-peer-use):
-
-1. Skip any received entry whose `versionId` is identical to that of an entry
-   it already holds. If a received entry has the same version number as a held
-   entry but a different `versionId`, the update is duplicitous and is
-   rejected.
-2. Append the remaining entries, in order, to a copy of the held
-   [[ref: DID Log]].
-3. Resolve the DID with that copy as `didLog`, the received witness proofs
-   file (or, if none was received, the held one) as `didWitness`, and the
-   `versionId` of the last appended entry as `versionId`.
-4. If resolution succeeds, replace the held [[ref: DID Log]] and witness proofs
-   file with the ones used in step 3. Otherwise, reject the update and keep the
-   held files unchanged.
-
-No second copy of the log is needed to detect an update that does not extend
-the held log. The [[ref: entry hash]] of each entry is calculated with the
-`versionId` of the previous entry as input, so an appended entry verifies only
-if it continues from the last held entry. Requesting the `versionId` of the
-last appended entry in step 3 ensures that resolution fails, rather than
-returning an earlier version, if any appended entry is invalid.
+**Applying an update.** A party receiving new entries applies them as defined
+in [Applying Peer-to-Peer Updates](#applying-peer-to-peer-updates). Because
+each [[ref: entry hash]] chains to the previous entry, this rejects any entry
+that does not continue from the log the party holds, without needing a second
+copy of the log.
 
 A `did:vh` DID used only peer-to-peer can be created for each relationship, so
 that no identifier is shared between relationships.
@@ -951,6 +987,11 @@ section. The proof `cryptosuite` **MUST** be one permitted by the active
 `method` [[ref: parameter]]; [[ref: Resolvers]] **MUST NOT** accept a
 structurally valid signature using any other cryptosuite.
 
+A `did:vh` log has no location whose control an attacker would also need in
+order to publish an update (see [No Authoritative
+Location](#no-authoritative-location)), so [[ref: DID Controllers]] **SHOULD**
+use [[ref: pre-rotation]].
+
 #### Witnesses
 
 `did:vh` uses the [[ref: witness]] mechanism defined in VH-Log's
@@ -980,7 +1021,8 @@ operation.
 Witnesses matter more for `did:vh` than for `did:webvh`. With no single
 location for the log, an attacker holding the update keys can distribute an
 update through any source; with [[ref: witnesses]] active, the update also
-needs a threshold of witness proofs. Their value against
+needs a threshold of witness proofs. [[ref: DID Controllers]] **SHOULD** use
+[[ref: witnesses]] for DIDs relied on by many parties. Their value against
 [duplicity](#log-freshness-and-duplicity) depends on how far the
 [[ref: witnesses]] are trusted, as described there.
 

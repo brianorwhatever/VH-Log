@@ -1,5 +1,17 @@
 ## VH-Log Specification
 
+### Conformance
+
+As well as sections marked as non-normative, all examples, notes, and
+informative checklists in this specification are non-normative. Everything
+else in this specification is normative.
+
+The key words **MAY**, **MUST**, **MUST NOT**, **NOT REQUIRED**,
+**RECOMMENDED**, **REQUIRED**, **SHOULD**, and **SHOULD NOT** in this
+specification are to be interpreted as described in BCP 14 [[spec:RFC2119]]
+[[spec:RFC8174]] when, and only when, they appear in all capitals, as shown
+here.
+
 ### The VH-Log File
 
 The [[ref: log]] contains a list of [[ref: log entries]], one for each version
@@ -38,7 +50,15 @@ log file for publication.
 
 The default name of the log file is `vh-log.jsonl`. A [[ref: specialisation]]
 **MAY** define a different resource name. The location of the log file is defined
-by the [[ref: specialisation]].
+by the [[ref: specialisation]]. The location is used only to find the log; it
+plays no part in verifying control of the log, which depends only on the
+[[ref: SCID]], the hash chain and the proofs. A [[ref: specialisation]]
+**SHOULD** document any assumptions it makes about log location that could
+affect the uniqueness or verifiability of a log.
+
+Log files and witness files **MUST** be published and retrieved as described
+in [Publishing and Retrieving Log Resources](#publishing-and-retrieving-log-resources)
+whenever they are transferred over a network.
 
 ::: example
 
@@ -159,7 +179,8 @@ Creating a [[ref: log]] is done by carrying out the following steps.
 The following steps **MUST** be executed to resolve the [[ref: state]] object
 for a given log:
 
-1. Retrieve the log file from the location defined by the [[ref: specialisation]].
+1. Retrieve the log file from the location defined by the [[ref: specialisation]],
+   as described in [Retrieving Log Resources](#retrieving-log-resources).
 2. The log file **MUST** be processed as described below.
 
 To process the retrieved log file, the [[ref: Resolver]] **MUST** carry out the
@@ -263,6 +284,12 @@ For each entry:
 
 [[ref: Resolvers]] **SHOULD NOT** cache a log that fails verification.
 
+A [[ref: Resolver]] that has previously resolved a log **SHOULD** retain the
+latest `versionId` it observed for that log. When later given a copy of the log
+that does not contain that `versionId` — a truncated copy, or a copy that
+diverges from the one seen before — the [[ref: Resolver]] **SHOULD** warn the
+caller or fail resolution.
+
 ##### Selecting a Version
 
 A request to resolve a log **MAY** specify a target version in one of three
@@ -363,6 +390,12 @@ witnessed]] (if necessary), appended to the existing log file, and published:
 12. Publish the updated log file at the location defined by the [[ref:
     specialisation]]. If there are [[ref: watchers]] configured, trigger webhooks
     to notify them. See the [Watchers](#watchers) section.
+
+A [[ref: Log Controller]] **MUST** only publish a log that extends the log it
+most recently published: every published [[ref: log entry]] is retained, and
+the new [[ref: log entry]]'s predecessor is the last published [[ref: log
+entry]]. A [[ref: Log Controller]] **MUST NOT** publish, or give to any party,
+two different [[ref: log entries]] with the same predecessor.
 
 #### Deactivate
 
@@ -720,6 +753,16 @@ where, at minimum:
 structurally-valid signature over a different cryptosuite than allowed by the
 active `logVersion` **MUST NOT** be accepted.
 
+[[ref: Log Controllers]], [[ref: witnesses]] and [[ref: Resolvers]] **MUST**
+generate and verify [[ref: Data Integrity]] proofs (for both [[ref: log
+entries]] and witness proofs) as defined by the specification of the
+cryptosuite in use.
+
+Private keys, and any other secret material such as random seeds, used by
+[[ref: Log Controllers]] and [[ref: witnesses]] **MUST** be kept in secure
+storage and **MUST NOT** appear in the log, the witness file, or any other
+published resource.
+
 The authorized verification keys are the [[ref: multikey]]-formatted public keys
 in the **active** `updateKeys` list from the `parameters` property. Any of the
 authorized verification keys may be referenced in the [[ref: Data Integrity]]
@@ -787,7 +830,11 @@ A [[ref: Log Controller]] **MAY** include extra hashes in `nextKeyHashes` that
 are not subsequently used. Unused hashes are ignored.
 
 After rotating from a pre-rotation public key, the corresponding private key
-**SHOULD** be treated as **spent** and **securely destroyed**.
+**SHOULD** be treated as **spent** and **securely destroyed**. A [[ref: Log
+Controller]] **SHOULD NOT** reuse a pre-rotation key once its public key has
+been revealed in the log. Such reuse does not make the log invalid, and
+[[ref: Resolvers]] are **NOT REQUIRED** to detect it, but a [[ref: Resolver]]
+**MAY** warn when it does.
 
 When processing other than the first [[ref: log entry]] where [[ref: pre-rotation]]
 is active, a [[ref: Resolver]] **MUST**:
@@ -943,6 +990,11 @@ proofs with `versionId`s not in the log file.
 To avoid unnecessary clutter in the witness file, array entries without proofs
 (containing only the `versionId`) **SHOULD** be removed.
 
+A witness file **MUST NOT** contain proofs for two different `versionId`s with
+the same version number. When adding proofs to the witness file, a
+[[ref: Log Controller]] **MUST** reject any proof for a `versionId` that
+conflicts in this way with the log it is publishing.
+
 ##### Witnessing a Log Entry Update
 
 The following process is used to witness a log entry update:
@@ -957,6 +1009,8 @@ The following process is used to witness a log entry update:
 - Each [[ref: witness]] **MUST** independently verify the candidate entry using
   every step in [Read (Resolve)](#read-resolve). Any failure **MUST** cause the
   witness to refuse approval.
+- A [[ref: witness]] **MUST NOT** approve more than one [[ref: log entry]] with
+  the same predecessor.
 - Each [[ref: witness]] determines (based on the governance of the ecosystem)
   if they approve of the update.
 - If the verification is successful and approval is granted, the [[ref: witness]]
@@ -1027,6 +1081,10 @@ scope of this specification how a [[ref: Log Controller]] requests a [[ref:
 watcher]] to monitor a log or how a [[ref: watcher]] requests inclusion in the
 log.
 
+A [[ref: watcher]] **SHOULD** check that each copy of a log it retrieves
+extends the copy it holds, and **SHOULD** report any divergence it detects
+between copies.
+
 The governance of [[ref: watchers]] is out of scope for this specification, which
 defines only the technical mechanisms for notifying and querying [[ref: watcher]]
 services.
@@ -1093,3 +1151,62 @@ and other components:
 - **POST `<WATCHER URL>/resource/delete?scid=<SCID>&path=<resourcePath>`**:
   Notifies the [[ref: watcher]] that the given resource should be deleted from
   its cache.
+
+#### Publishing and Retrieving Log Resources
+
+This section applies whenever a log file, witness file, or other log resource
+is published to, or retrieved from, a network location. A [[ref:
+specialisation]] defines where those locations are; this section defines how
+they are served and fetched.
+
+##### Publishing Log Resources
+
+1. Log resources **MUST** be served over HTTPS, with the server authenticated
+   by TLS server authentication. Plain HTTP **MUST NOT** be used, except for
+   testing or non-production deployments.
+2. Self-signed TLS certificates **SHOULD NOT** be used in production.
+3. So that a [[ref: Resolver]] running in a web browser can retrieve it, the
+   HTTP response for the log file **MUST** include the header
+   `Access-Control-Allow-Origin: *`.
+4. A [[ref: Log Controller]] that serves log resources through intermediaries
+   such as CDN caches or load balancers **MUST** ensure that those
+   intermediaries do not serve stale or altered log resources.
+
+##### Retrieving Log Resources
+
+A [[ref: Resolver]] fetches resources from a location derived from a log
+identifier it does not control, which makes it a potential Server-Side Request
+Forgery (SSRF) vector. When retrieving log resources, a [[ref: Resolver]]
+**MUST**:
+
+1. **HTTPS only.** Reject any URL scheme other than `https`, including after a
+   redirect, and validate the server's TLS certificate. Certificate validation
+   **MUST NOT** be disabled by default.
+2. **No automatic redirects.** Not automatically follow HTTP 3xx responses when
+   fetching log files or witness files. If following redirects is offered as an
+   opt-in, every check in this list **MUST** be re-applied to each redirect
+   target.
+3. **Case-insensitive percent-decoding.** Normalise the case of percent-encoded
+   octets, per [[spec:rfc3986]] §2.1, **before** making any allow or deny
+   decision. For example, rejecting `%3A` but accepting `%3a` is non-compliant.
+4. **Re-validate after decoding.** Apply all host and path checks to the
+   decoded values. Percent-encoded IP literals and traversal sequences (such as
+   `%2E%2E` and `%2e%2e`) **MUST** be rejected after decoding.
+5. **IP-literal and private-address rejection.** Reject IPv4 and IPv6 literal
+   hosts both (a) after percent-decoding the host taken from the log
+   identifier, and (b) after DNS resolution. By default, deny loopback
+   (`127.0.0.0/8`, `::1`), private (`10.0.0.0/8`, `172.16.0.0/12`,
+   `192.168.0.0/16`, `fc00::/7`) and link-local (`169.254.0.0/16`,
+   `fe80::/10`) addresses. Opt-ins for development **MAY** be provided, but
+   **MUST** be off by default.
+6. **No localhost in production.** Not issue requests to `localhost`,
+   `127.0.0.0/8`, `::1`, or names resolving to them, except through a testing
+   opt-in that is off by default.
+7. **Response size cap.** Enforce a maximum body size for both log and witness
+   files, terminating the transfer if it is exceeded regardless of any declared
+   `Content-Length`. The `Content-Length` header **SHOULD** be checked before
+   the body is read, and its absence treated as grounds for a stricter cap or
+   for rejection. A cap of 5 MiB is **RECOMMENDED** as a default.
+8. **Operation timeout.** Enforce a wall-clock timeout on the complete
+   fetch-and-verify operation for a single resolution. A timeout of 30 seconds
+   is **RECOMMENDED** as a default.

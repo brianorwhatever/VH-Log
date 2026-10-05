@@ -156,6 +156,10 @@ Given a log and a target version (by `versionTime` or `versionId`), the resolver
 ## Authoring Guidelines
 
 - Write normative requirements using RFC 2119 terms (MUST, SHOULD, MAY).
+- Security and Privacy Considerations sections are **non-normative** in all three specs
+  (following DID Core §9/§10; changed 2026-10-05). Put every RFC 2119 requirement in the
+  normative body and have the considerations sections describe threats and link to it.
+  VH-Log's transport/TLS/CORS/SSRF rules live in "Publishing and Retrieving Log Resources".
 - Each normative statement should be individually testable.
 - Keep DID-specific content out of this spec — if something is DID-specific, note it as
   specialisation-defined behaviour.
@@ -226,8 +230,8 @@ exists and renders cleanly. Key design decisions in that draft (open to revision
   new entry needs witnessing, optional otherwise). The receiver skips already-held entries,
   appends the rest to a copy of its log, and resolves with `versionId` = last new entry; the
   entry-hash chaining means a non-extending update fails verification, so no second copy of the
-  log is needed. The normative MUST for this lives in Security Considerations → Peer-to-Peer
-  Use.
+  log is needed. The normative MUST for this lives in Update (Rotate) → Applying Peer-to-Peer
+  Updates (moved 2026-10-05 from Security Considerations, which is now non-normative).
 - Local directory `src` references (`file:` URL, RFC 8089, a directory — not a file — from
   which `did.jsonl`/`did-witness.json` are read; changed 2026-10-04 from `file:` URLs in
   `didLog`/`didWitness`) only for a resolver local to its client (library/CLI);

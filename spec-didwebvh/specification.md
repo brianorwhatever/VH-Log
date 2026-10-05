@@ -1,5 +1,17 @@
 ## `did:webvh` DID Method Specification
 
+### Conformance
+
+As well as sections marked as non-normative, all examples, notes, and
+informative checklists in this specification are non-normative. Everything
+else in this specification is normative.
+
+The key words **MAY**, **MUST**, **MUST NOT**, **NOT REQUIRED**,
+**RECOMMENDED**, **REQUIRED**, **SHOULD**, and **SHOULD NOT** in this
+specification are to be interpreted as described in BCP 14 [[spec:RFC2119]]
+[[spec:RFC8174]] when, and only when, they appear in all capitals, as shown
+here.
+
 ### Relationship to VH-Log
 
 `did:webvh` is a [[ref: specialisation]] of the [[ref: VH-Log]] specification.
@@ -249,7 +261,7 @@ Resolving a `did:webvh` DID follows the Read (Resolve) algorithm defined in [[re
 **Retrieval (before the VH-Log algorithm):**
 
 1. Use the [DID-to-HTTPS Transformation](#the-did-to-https-transformation) to derive the HTTPS URL of the [[ref: DID Log]] file.
-2. Perform an HTTPS `GET` request to the URL using an agent that enforces the security requirements in [Security Considerations](#security-considerations).
+2. Perform an HTTPS `GET` request to the URL meeting the requirements of VH-Log's [Retrieving Log Resources](../next/index.html#retrieving-log-resources) section.
 3. When performing DNS resolution during the HTTPS `GET`, the client **SHOULD** use [[spec:rfc8484]] to prevent tracking of the identity being resolved.
 4. Apply the VH-Log Read algorithm to the retrieved file, incorporating the did:webvh-specific specialisations below.
 
@@ -530,6 +542,12 @@ DIDDoc to one that resolves to a different HTTPS URL if the following conditions
 - The [[ref: SCID]] **MUST** be the same in the original and renamed DID. Specifically, the SCID segment of `state.id` in **every** [[ref: log entry]] (including the renamed entry and all subsequent entries) **MUST** equal the `parameters.scid` from the first entry. Only the host/path portion of `state.id` may change under portability; the SCID segment is immutable for the life of the DID. A "portable rename" entry whose `state.id` carries a different SCID **MUST** be rejected.
 - The [[ref: DIDDoc]] **MUST** contain the prior DID string as an `alsoKnownAs` entry.
 - [[ref: DID Controllers]] **SHOULD** account for any DNS requirements in making domain changes that impact a `did:webvh` DID being moved, such as those outlined in [[spec:rfc1034]] (“Domain Names - Concepts and Facilities”), and [[spec:rfc1035]] (“Domain Names Implementation and Specification”).
+
+Because the DNS portion of the DID is used to find the [[ref: DID Log]], a
+domain or namespace that is reassigned while DID resources remain under it can
+cause a DID to be misattributed. A [[ref: DID Controller]] relinquishing a DNS
+name or namespace **SHOULD** first either move the DID to a new location under
+its control using portability, or deactivate it.
 
 **Security Note — Misleading Prior Domain Association**
 

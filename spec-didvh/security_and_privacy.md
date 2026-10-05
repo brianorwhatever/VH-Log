@@ -1,12 +1,15 @@
 ## Security Considerations
 
+*This section is non-normative.*
+
 This section follows the guidelines in [[spec:RFC3552]] and aligns with the
 [[spec:DID-CORE]] requirements in [DID Core
 7.3](https://www.w3.org/TR/did-core/#security-requirements). The security
 considerations in [VH-Log's Security
 Considerations](../next/index.html#security-considerations) section apply to
 `did:vh` unchanged, except as noted below. The sections below cover only what
-differs for `did:vh`.
+differs for `did:vh`. The requirements referred to here are defined in the
+normative sections of this specification and of VH-Log.
 
 ### No Authoritative Location
 
@@ -40,10 +43,12 @@ The resulting threats, and their mitigations, are:
   the web location is a second factor an attacker who steals the update keys
   also needs in order to publish. A `did:vh` log has no such location, so an
   attacker with the update keys can distribute a valid update through any
-  source. Mitigation: [[ref: DID Controllers]] **SHOULD** use
-  [[ref: pre-rotation]], and **SHOULD** use [[ref: witnesses]] for DIDs relied
-  on by many parties, so that an update also needs the approval of a threshold
-  of [[ref: witnesses]].
+  source. Mitigation: [[ref: DID Controllers]] are expected to use
+  [[ref: pre-rotation]] (see [Authorized Keys and
+  Pre-Rotation](#authorized-keys-and-pre-rotation)), and to use
+  [[ref: witnesses]] for DIDs relied on by many parties, so that an update
+  also needs the approval of a threshold of [[ref: witnesses]] (see
+  [Witnesses](#witnesses)).
 
 ### The `src` Option and Other Client-Supplied Values
 
@@ -52,13 +57,14 @@ by the client or by whoever gave it the DID URL, and so are untrusted input.
 The same is true of a `didLog` value, which is why it is verified in full:
 
 - **Server-side request forgery.** A web location `src` value can name any
-  host. [[ref: Resolvers]] **MUST** apply to web location retrievals all the transport
-  hardening requirements in [VH-Log's Resolver Transport
-  Hardening](../next/index.html#resolver-transport-hardening-ssrf-and-network-boundary)
-  section, including rejecting IP literals and not following redirects
-  automatically. [[ref: Resolvers]] **MAY** refuse to retrieve from `src`
-  locations at all, or allow only locations permitted by their configuration.
-  The same hardening applies to a client retrieving from a web location or
+  host. [[ref: Resolvers]] apply to web location retrievals the transport
+  requirements in VH-Log's [Retrieving Log
+  Resources](../next/index.html#retrieving-log-resources) section (see [Web
+  Locations](#web-locations)), including rejecting IP literals and not
+  following redirects automatically. A [[ref: Resolver]] can also decline to
+  retrieve from `src` references at all (see [`did:vh` Resolution
+  Options](#didvh-resolution-options)), or allow only locations permitted by
+  its configuration. The same hardening applies to a client retrieving from a web location or
   a [[ref: watcher]] itself. The one exception is a loopback (`http`)
   reference, which is accepted only by a [[ref: Resolver]] local to its
   client and never from a DID URL; see [Web Locations](#web-locations). A
@@ -67,8 +73,8 @@ The same is true of a `didLog` value, which is why it is verified in full:
 - **Stale or wrong logs.** A web location may serve an old copy of the log,
   or a log for a different DID. The first is covered under [No Authoritative
   Location](#no-authoritative-location); the second is detected by the
-  [[ref: SCID]] check, which [[ref: Resolvers]] **MUST** perform on every
-  entry.
+  [[ref: SCID]] check that the [Resolution
+  Algorithm](#resolution-algorithm) applies to every entry.
 - **Local file and service access.** A local directory or loopback `src` reference is accepted only
   by a [[ref: Resolver]] local to its client; a [[ref: Resolver]] that accepts
   requests from other systems never reads local files or retrieves from
@@ -79,13 +85,14 @@ The same is true of a `didLog` value, which is why it is verified in full:
 - **Misleading association.** The domain in a `src` value says nothing about
   who controls the DID. A [[ref: DID Controller]] can publish a log at any
   location it can write to, and anyone can put any `src` value in a DID URL.
-  [[ref: Resolvers]] and their clients **MUST NOT** treat a web location as
-  evidence of an association between the DID and the owner of the domain.
+  For this reason, [[ref: Resolvers]] and their clients do not treat a web
+  location as evidence of an association between the DID and the owner of
+  the domain (see [The `src` Option](#the-src-option)).
 
 ### Endpoint Authentication
 
-Retrievals from web locations and from [[ref: watchers]] over HTTP **MUST**
-use HTTPS with server authentication, as defined in [VH-Log's Endpoint
+Retrievals from web locations and from [[ref: watchers]] over HTTP use HTTPS
+with server authentication, as described in VH-Log's [Endpoint
 Authentication](../next/index.html#endpoint-authentication) section. The only
 exception is a retrieval from a loopback (`http`) reference by a
 [[ref: Resolver]] local to its client. As with
@@ -95,11 +102,12 @@ authentication of the server that provided it.
 ### Peer-to-Peer Use
 
 When [[ref: DID Logs]] are exchanged peer-to-peer, each party holds the only
-copies of the other's log, and an update may carry only the new entry. A party
-**MUST** apply an update as defined in [Peer-to-Peer
-Exchange](#peer-to-peer-exchange), so that entries that do not continue from
-the log it holds are rejected, and **SHOULD** keep a rejected update as
-evidence of duplicity.
+copies of the other's log, and an update may carry only the new entry. With no
+other copy to compare against, the hash chain is what protects a party: it
+applies an update as defined in [Applying Peer-to-Peer
+Updates](#applying-peer-to-peer-updates), so that entries that do not continue
+from the log it holds are rejected, and keeps a rejected update as evidence of
+duplicity.
 
 ### Post Quantum Attacks
 
@@ -108,10 +116,10 @@ Attacks](../next/index.html#post-quantum-attacks) section.
 [[ref: Pre-rotation]] is especially valuable for `did:vh`, for the reason
 given under [No Authoritative Location](#no-authoritative-location).
 
-### Resolver Validation Checklist (informative)
+### Resolver Validation Checklist
 
 This checklist extends [VH-Log's Resolver Validation
-Checklist](../next/index.html#resolver-validation-checklist-informative) with
+Checklist](../next/index.html#resolver-validation-checklist) with
 `did:vh`-specific points. It does not restate or replace the normative
 requirements.
 
@@ -140,6 +148,8 @@ requirements.
 
 ## Privacy Considerations
 
+*This section is non-normative.*
+
 This section addresses the privacy considerations in alignment with
 [[spec:RFC6973]] Section 5, and aligns with the [[spec:DID-CORE]] requirements
 in [DID Core 7.4](https://www.w3.org/TR/did-core/#privacy-requirements). The
@@ -163,8 +173,8 @@ network address of the party interested in the DID.
 
 A `did:vh` DID contains no domain name, so it does not by itself link its
 controller to a domain owner. `src` values and `alsoKnownAs` entries can
-reintroduce such a link, and [[ref: DID Controllers]] that want to avoid it
-**SHOULD NOT** publish them.
+reintroduce such a link, so [[ref: DID Controllers]] that want to avoid it are
+advised not to publish them.
 
 For peer-to-peer use, a [[ref: DID Controller]] can create a separate `did:vh`
 DID for each relationship, so that the relationships cannot be correlated by
@@ -176,4 +186,4 @@ A `did:vh` [[ref: DID Log]] is likely to be held in several places — by
 [[ref: watchers]], at web locations, and by peers. A [[ref: DID Controller]]
 cannot remove every copy itself. The [[ref: watcher]] deletion operation
 defined in VH-Log can be used to request removal from [[ref: watchers]]; how
-such requests are handled **SHOULD** be defined by ecosystem governance.
+such requests are handled is best defined by ecosystem governance.

@@ -1,23 +1,27 @@
 ## Security Considerations
 
+*This section is non-normative.*
+
 This section follows the guidelines in [[spec:RFC3552]] and extends the security
 considerations defined in [VH-Log's Security Considerations](../next/index.html#security-considerations)
 section, which apply to `did:webvh` unchanged unless noted otherwise below. This
 section also aligns with the [[spec:DID-CORE]] requirements in
-[DID Core 7.3](https://www.w3.org/TR/did-core/#security-requirements).
+[DID Core 7.3](https://www.w3.org/TR/did-core/#security-requirements). The
+requirements referred to here are defined in the normative sections of this
+specification and of VH-Log.
 
 ### Threats and Attacks
 
-The threat classes VH-Log implementations **MUST** mitigate — eavesdropping,
+The threat classes VH-Log addresses — eavesdropping,
 replay attacks, message insertion/deletion/modification, truncation or
 withholding of log entries, denial of service and amplification,
 man-in-the-middle, and conflicting parallel updates / split view — are as
 defined in [VH-Log's Threats and Attacks](../next/index.html#threats-and-attacks)
 section, applied here to the [[ref: DID Log]], `did.jsonl`, and `did-witness.json`.
 
-`did:webvh` additionally **MUST** mitigate:
+`did:webvh` additionally faces:
 
-- **Misleading prior-domain association** — A DID may be ported from a domain it never actually used, creating a false impression of association with that domain. Mitigation: resolvers and clients **MUST** ignore prior domain components when evaluating the DID, as described in [Unique Assignment of DIDs](#unique-assignment-of-dids).
+- **Misleading prior-domain association** — A DID may be ported from a domain it never actually used, creating a false impression of association with that domain. Mitigation: resolvers and clients ignore prior domain components when evaluating the DID, as required in [DID Portability](#did-portability) and described in [Unique Assignment of DIDs](#unique-assignment-of-dids).
 
 The use of DNSSEC [[spec:RFC4033]], [[spec:RFC4034]], [[spec:RFC4035]] is
 essential to prevent spoofing and ensure authenticity of DNS records, since
@@ -69,68 +73,77 @@ used to host its [[ref: DID Log]], before being moved — via the
 [did:webvh portability](#did-portability) capability — to a different domain
 under the [[ref: DID Controller]]'s control. This creates a potential for
 misleading claims of association with the original domain. To prevent this,
-resolvers and clients of resolvers **MUST** ignore any prior domain components
-when evaluating the history or trustworthiness of a `did:webvh` DID; only the
-current hosting location and its associated verifiable history are relevant. In
-addition, the [whois](#whois-linkedvp-service) DID URL capability **SHOULD** be
-used to obtain attestations about the DID and [[ref: DID Controller]] from
-relevant authorities.
+[DID Portability](#did-portability) requires resolvers and clients of resolvers
+to ignore any prior domain components when evaluating the history or
+trustworthiness of a `did:webvh` DID; only the current hosting location and its
+associated verifiable history are relevant. In addition, the
+[whois](#whois-linkedvp-service) DID URL capability can be used to obtain
+attestations about the DID and [[ref: DID Controller]] from relevant
+authorities.
 
 ### Endpoint Authentication
 
 As defined in [VH-Log's Endpoint Authentication](../next/index.html#endpoint-authentication)
-section: DID resource retrieval endpoints **MUST** be authenticated using TLS
-server authentication, and self-signed certificates **SHOULD NOT** be used in
-production.
+section: DID resources are served over HTTPS with TLS server authentication,
+as required by VH-Log's [Publishing Log
+Resources](../next/index.html#publishing-log-resources) section.
 
-### Resolver Transport Hardening (SSRF and Network Boundary)
+### Resolver Transport Hardening
 
 The SSRF and network-boundary hardening requirements for a `did:webvh`
 resolver — no automatic redirects, IP-literal rejection, case-insensitive
 percent-decoding, re-validation after decoding, response size caps, operation
 timeouts, HTTPS-only, and no localhost in production — are as defined in
-[VH-Log's Resolver Transport Hardening](../next/index.html#resolver-transport-hardening-ssrf-and-network-boundary)
-section, applied here to fetches of `did.jsonl` and `did-witness.json`.
+[VH-Log's Retrieving Log Resources](../next/index.html#retrieving-log-resources)
+section, which applies to fetches of `did.jsonl` and `did-witness.json`. The
+reasons for them are described in VH-Log's [Threats and
+Attacks](../next/index.html#threats-and-attacks) section.
 
 ### Network Topology
 
 As defined in [VH-Log's Network Topology](../next/index.html#network-topology)
 section: `did:webvh` relies on web infrastructure and does not require
-peer-to-peer networking; implementations relying on CDN caching or load
-balancers **MUST** ensure these intermediaries do not serve stale or tampered
-DID data.
+peer-to-peer networking. [[ref: DID Controllers]] relying on CDN caching or
+load balancers ensure these intermediaries do not serve stale or tampered DID
+data, as required by VH-Log's [Publishing Log
+Resources](../next/index.html#publishing-log-resources) section.
 
 ### Cryptographic Protection
 
 As defined in [VH-Log's Cryptographic Protection](../next/index.html#cryptographic-protection)
 section: [[ref: DID Log]] entries and witness proofs are signed and
-integrity-protected but not confidential, and secret data (controller private
-keys, witness private keys, random seeds) **MUST** be protected in secure
-storage and never exposed in the DID Log.
+integrity-protected but not confidential. Secret data (controller private
+keys, witness private keys, random seeds) is kept in secure storage and never
+exposed in the DID Log, as required by VH-Log's [Authorized
+Keys](../next/index.html#authorized-keys) section.
 
 ### Signature Implementation
 
 As defined in [VH-Log's Signature Implementation](../next/index.html#signature-implementation)
 section: `did:webvh` uses standard [[ref: Data Integrity]] proof mechanisms for
-signing DID Log entries and witness proofs, and implementations **MUST** follow
-the suite's signature generation and verification requirements.
+signing DID Log entries and witness proofs, generated and verified as defined
+by the cryptosuite in use (see VH-Log's [Authorized
+Keys](../next/index.html#authorized-keys) section).
 
 ### International Domain Names
 
-`did:webvh` implementers **MAY** publish [[ref: DID Logs]] on domains that use
-international domains. The [DID-to-HTTPS Transformation](#the-did-to-https-transformation)
-section of this specification **MUST** be followed by [[ref: DID Controllers]]
-and DID resolvers to ensure the proper handling of international domains.
+[[ref: DID Logs]] can be published on internationalised domain names. The
+[DID-to-HTTPS Transformation](#the-did-to-https-transformation) section defines
+how [[ref: DID Controllers]] and DID resolvers handle them; following it
+consistently prevents two parties mapping the same DID to different
+locations.
 
-### Cross-Origin Resource Sharing (CORS) Policy Considerations
+### Cross-Origin Resource Sharing (CORS)
 
-As defined in [VH-Log's CORS Policy Considerations](../next/index.html#cross-origin-resource-sharing-cors-policy-considerations)
-section, applied here to the [[ref: DID Log]] file: the HTTP response **MUST**
-include `Access-Control-Allow-Origin: *` to support browser-based resolution.
+As described in [VH-Log's CORS](../next/index.html#cross-origin-resource-sharing-cors)
+section: to support browser-based resolution, the HTTP response for the
+[[ref: DID Log]] file includes `Access-Control-Allow-Origin: *`, as required
+by VH-Log's [Publishing Log Resources](../next/index.html#publishing-log-resources)
+section.
 
 ### Publishing parallel `did:web`
 
-`did:webvh` implementers that consider [publishing parallel `did:web` DID](#publishing-a-parallel-didweb-did) **SHOULD** evaluate
+`did:webvh` implementers that consider [publishing parallel `did:web` DID](#publishing-a-parallel-didweb-did) are advised to evaluate the
 security impact from losing added security properties of `did:webvh`
 and refer to [did:web Security and Privacy Considerations](https://w3c-ccg.github.io/did-method-web/#dns-considerations) for additional guidance.
 
@@ -138,15 +151,15 @@ and refer to [did:web Security and Privacy Considerations](https://w3c-ccg.githu
 
 As defined in [VH-Log's Post Quantum Attacks](../next/index.html#post-quantum-attacks)
 section: `did:webvh` [[ref: Key Pre-Rotation]] provides enough flexibility for
-"post-quantum safety." For did:webvh-specific guidance, implementors **SHOULD**
-refer to the [corresponding Implementation Guide section](https://didwebvh.info/latest/implementers-guide/prerotation-keys/#post-quantum-attacks).
+"post-quantum safety." For did:webvh-specific guidance, implementers are advised
+to refer to the [corresponding Implementation Guide section](https://didwebvh.info/latest/implementers-guide/prerotation-keys/#post-quantum-attacks).
 
-### Resolver Validation Checklist (informative)
+### Resolver Validation Checklist
 
 The following checklist maps normative resolver requirements to concrete
 validation points, and is intended to assist conformance test suite authors and
 implementers auditing their own resolver implementations. It extends
-[VH-Log's Resolver Validation Checklist](../next/index.html#resolver-validation-checklist-informative)
+[VH-Log's Resolver Validation Checklist](../next/index.html#resolver-validation-checklist)
 with `did:webvh`-specific points; entries appearing here do not restate or
 replace the normative requirements defined in the verification algorithm in
 this specification.
@@ -170,6 +183,8 @@ same key material in body and fragment (multibase values byte-equal).
 
 ## Privacy Considerations
 
+*This section is non-normative.*
+
 This section addresses the privacy considerations in alignment with
 [[spec:RFC6973]] Section 5, extends
 [VH-Log's Privacy Considerations](../next/index.html#privacy-considerations),
@@ -182,8 +197,8 @@ As defined in [VH-Log's Surveillance](../next/index.html#surveillance) section,
 applied here to publicly accessible `did.jsonl` endpoints. Resolution of a
 `did:webvh` identifier also exposes the resolver's network activity to DNS
 providers and web servers, which could be used for tracking. Controllers and
-resolvers **MAY** use privacy-enhancing technologies such as VPNs, TOR, or
-trusted universal resolver services, and **MAY** adopt emerging approaches such
+resolvers can use privacy-enhancing technologies such as VPNs, TOR, or
+trusted universal resolver services, and can adopt emerging approaches such
 as [Oblivious DNS over HTTPS (ODoH)](https://datatracker.ietf.org/doc/html/draft-pauly-dprive-oblivious-doh-03)
 to reduce this risk.
 
@@ -195,9 +210,9 @@ infrastructure could allow tampering with DID resources; HTTPS and
 cryptographic signatures protect integrity, but confidentiality is not
 provided.
 
-### Implementation Hygiene (informative)
+### Implementation Hygiene
 
-As defined in [VH-Log's Implementation Hygiene](../next/index.html#implementation-hygiene-informative)
+As described in [VH-Log's Implementation Hygiene](../next/index.html#implementation-hygiene)
 section — dependency currency, filesystem permissions, CLI secret handling,
 HTTPS certificate validation, and error message hygiene — applied here to
 `did:webvh` implementations.
@@ -206,19 +221,17 @@ HTTPS certificate validation, and error message hygiene — applied here to
 
 Publishing a DID Log does not inherently solicit inbound traffic beyond normal
 DID resolution. However, public exposure of service endpoints in the DID
-Document may increase unsolicited interactions. [[ref: DID Controllers]]
-**SHOULD** avoid publishing unnecessary endpoints.
+Document may increase unsolicited interactions. [[ref: DID Controllers]] are
+advised to avoid publishing unnecessary endpoints.
 
 ### Misattribution
 
 Because the DNS portion of the DID is used for discovery, a misattribution risk
 arises if that DNS name is reassigned without the associated DID resources
-being updated or removed. Controllers **SHOULD** ensure DID deactivation before
-relinquishing a DNS name or namespace.
-
-Where possible, Controllers **SHOULD** use the [DID Portability](#did-portability)
-mechanism defined in this specification to move the DID to a new location
-under their control. When portability is used, an HTTP redirect from the old
+being updated or removed. For this reason, [DID
+Portability](#did-portability) asks Controllers to move the DID to a new
+location under their control, or to deactivate it, before relinquishing a DNS
+name or namespace. When portability is used, an HTTP redirect from the old
 location to the new one is the preferred approach, even in cases where DID
 ownership is transferred, as it enables seamless resolution while preserving
 the DID's verifiable history.
@@ -226,7 +239,7 @@ the DID's verifiable history.
 ### Correlation
 
 As defined in [VH-Log's Correlation](../next/index.html#correlation) section:
-[[ref: DID Controllers]] **SHOULD** avoid embedding personal identifiers or
+[[ref: DID Controllers]] are advised to avoid embedding personal identifiers or
 unnecessary service endpoints in DID documents.
 
 ### Identification
@@ -234,43 +247,43 @@ unnecessary service endpoints in DID documents.
 As defined in [VH-Log's Identification](../next/index.html#identification)
 section: DIDs are public identifiers and can be linked to real-world
 identities through their domain ownership. Entities that require anonymity
-**SHOULD** consider DID methods designed for pseudonymity.
+are advised to consider DID methods designed for pseudonymity.
 
 ### Right to Erasure ([GDPR Art. 17](https://gdpr-info.eu/art-17-gdpr/))
 
 As defined in [VH-Log's Right to Erasure](../next/index.html#right-to-erasure)
 section: while a [[ref: DID Controller]] can delete published data as
-described in [Deactivate (Revoke)](#deactivate-revoke), it is **RECOMMENDED**
-for monitoring [[ref: watchers]] to cache the last known state indefinitely, so
-the ability and process for complete data erasure depends on [[ref: watchers]]
-behavior and **SHOULD** be defined by ecosystem governance.
+described in [Deactivate (Revoke)](#deactivate-revoke), monitoring
+[[ref: watchers]] are expected to keep caching the last known state, so the
+ability and process for complete data erasure depends on [[ref: watcher]]
+behaviour and is best defined by ecosystem governance.
 
 ### Secondary Use
 
 As defined in [VH-Log's Secondary Use](../next/index.html#secondary-use)
-section: [[ref: DID Controllers]] **SHOULD** minimize publication of DID Log
-data that could be used for purposes beyond the intended use.
+section: [[ref: DID Controllers]] are advised to minimise publication of DID
+Log data that could be used for purposes beyond the intended use.
 
 ### Disclosure
 
 As defined in [VH-Log's Disclosure](../next/index.html#disclosure) section: all
-data in the [[ref: DID Log]] is publicly accessible, and sensitive data
-**MUST NOT** be included.
+data in the [[ref: DID Log]] is publicly accessible, so sensitive data does not
+belong in it.
 
 ### Exclusion
 
 As defined in [VH-Log's Exclusion](../next/index.html#exclusion) section:
 `did:webvh` uses DNS for discovery but does not require controller ownership
-of a DNS domain — Controllers **MAY** publish under a namespace they control
+of a DNS domain — Controllers can publish under a namespace they control
 on a web-hosting platform that serves static files over HTTPS (for example, a
 GitHub repository or pages space), reducing barriers to participation.
 
 Residual exclusion risks remain: access to such platforms typically requires
 an account and compliance with provider terms of service; platforms might
 impose geoblocking, payment requirements, or content restrictions; and
-accounts can be suspended. Controllers **SHOULD** maintain the ability to
+accounts can be suspended. Controllers are advised to keep the ability to
 republish or mirror DID resources under alternative hosts (including using
-`did:webvh` [Watchers](#did-watchers)) and **SHOULD** document a transition
+`did:webvh` [Watchers](#did-watchers)), and to document a transition
 plan so that participants are not locked out if a hosting provider becomes
 unavailable.
 
@@ -283,7 +296,7 @@ While this concern is generally associated with the use of verifiable credential
 Privacy-respecting credential issuers, credential holders, and verifiers all have a role in preventing "phone home" surveillance. The following practices can help:
 
 - **Privacy-respecting Issuers (including DID Controllers hosting VC-related resources)**
-  - **SHOULD NOT** design or deploy credential-related resources (such as revocation registries) in a way that enables the identification of individual holders at presentation time.
+  - Do not design or deploy credential-related resources (such as revocation registries) in a way that enables the identification of individual holders at presentation time.
   - Use privacy-preserving designs — such as compact status lists, batching, and/or large revocation registries that provide "lost in a crowd" anonymity — to prevent correlation of access patterns to specific credential holders.
   - Use HTTP caching headers (e.g., `Cache-Control`, `ETag`) to enable CDNs, browsers, and resolvers to cache DID resources efficiently, reducing repeated origin requests that could enable tracking and improving performance.
 
@@ -297,4 +310,4 @@ Privacy-respecting credential issuers, credential holders, and verifiers all hav
   - Use privacy-enhancing network tools (e.g., TOR, VPN) or trusted intermediary resolvers to retrieve DID resources in a way that avoids revealing verifier identity or network location to the issuer or hosting provider.
   - Where possible, support privacy-preserving resolution protocols or intermediaries offered by the hosting party.
 
-A related risk is that an issuer may deliberately or inadvertently create **holder-specific identifiers** for data elements that are expected to be common across all holders — for example, by issuing personalized revocation list URLs or unique resource paths. This enables tracking of specific holders even if the underlying credential is otherwise privacy-preserving. Preventing this requires shared responsibility: issuers **MUST NOT** generate such holder-specific identifiers; holders and verifiers **SHOULD** reject credentials or status mechanisms that contain them; and independent third parties, including [DID Watchers](#did-watchers), **SHOULD** monitor issuer implementations to detect and report violations of this principle.
+A related risk is that an issuer may deliberately or inadvertently create **holder-specific identifiers** for data elements that are expected to be common across all holders — for example, by issuing personalized revocation list URLs or unique resource paths. This enables tracking of specific holders even if the underlying credential is otherwise privacy-preserving. Preventing this requires shared responsibility: issuers should never generate such holder-specific identifiers; holders and verifiers are advised to reject credentials or status mechanisms that contain them; and independent third parties, including [DID Watchers](#did-watchers), can monitor issuer implementations to detect and report violations of this principle.
