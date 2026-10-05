@@ -1,0 +1,1095 @@
+## VH-Log Specification
+
+### The VH-Log File
+
+The [[ref: log]] contains a list of [[ref: log entries]], one for each version
+of the [[ref: state]] object. A new [[ref: log entry]] is added each time the
+[[ref: state]] object is updated or the [[ref: parameters]] that control the
+generation and verification of the log change.
+
+Each entry is a JSON object consisting of the following properties.
+
+`{ "versionId": "", "versionTime": "", "parameters": {}, "state": {}, "proof": [] }`
+
+1. The value of `versionId` **MUST** be a string consisting of the version number
+   (starting at `1` and incrementing by one per version), a literal dash `-`,
+   and the `entryHash`, a hash calculated across the [[ref: log entry]] content.
+   The input to the hash is chosen so as to link each entry to its predecessor
+   in a ledger-like chain. The input to the hash is specified in the
+   [Entry Hash Generation and Verification](#entry-hash-generation-and-verification)
+   section of this specification.
+2. The value of `versionTime` **MUST** be a timestamp in UTC of the entry in
+   [[ref: ISO8601]] format, as asserted by the [[ref: Log Controller]]. The
+   timestamp **MUST** be the time the entry will be retrieved by a [[ref:
+   witness]] or [[ref: Resolver]], or before.
+3. The JSON object `parameters` contains the configurations set by the [[ref:
+   Log Controller]] to be used in the processing of current and future [[ref:
+   log entries]]. Permitted `parameters` are defined in the
+   [VH-Log Parameters](#vh-log-parameters) section of this specification.
+4. The JSON object `state` contains the [[ref: state]] object for this version
+   of the log. The type and schema of the [[ref: state]] object is defined by
+   the [[ref: specialisation]].
+5. The JSON array `proof` contains a [[ref: Data Integrity]] proof created for
+   the entry and signed by a key authorized to update the log.
+
+After creation, each entry has (per the [[ref: JSON Lines]] specification) all
+extra whitespace removed, a `\n` character appended, and the result added to the
+log file for publication.
+
+The default name of the log file is `vh-log.jsonl`. A [[ref: specialisation]]
+**MAY** define a different resource name. The location of the log file is defined
+by the [[ref: specialisation]].
+
+::: example
+
+**Examples of log entries that fail verification.** Illustrative and
+non-exhaustive; the normative rejection criteria are defined in the verification
+algorithm in this specification.
+
+1. **Duplicate witness IDs.** `{"threshold": 1, "witnesses": [{"id": "W"},
+   {"id": "W"}]}` — the same witness identifier appears more than once; each
+   witness must be unique.
+
+2. **Pre-rotation active but `updateKeys` omitted.** If entry N-1 commits
+   `nextKeyHashes: ["H1","H2"]`, then entry N must contain an explicit
+   `updateKeys` whose every member hashes to a value in `["H1","H2"]`. An
+   entry N omitting `updateKeys` (intending to inherit) is invalid.
+
+3. **Wrong cryptosuite on log-entry proof.** Rejected even if the signature is
+   structurally valid, because the active `logVersion` defines the permitted
+   cryptosuite. Verifying only `proofPurpose` is **insufficient**.
+
+4. **Unknown `logVersion` value.** An unrecognised value **MUST** be rejected
+   and **MUST NOT** be silently downgraded.
+
+:::
+
+### Log Operations
+
+#### Create
+
+Creating a [[ref: log]] is done by carrying out the following steps.
+
+1. **Determine the log identifier**
+   The log identifier format is defined by the [[ref: specialisation]]. The
+   identifier **MUST** incorporate the [[ref: SCID]] once it is calculated.
+   Where the [[ref: SCID]] appears in the identifier or in the [[ref: state]]
+   object, the placeholder string `"{SCID}"` **MUST** be used during the
+   creation process until the [[ref: SCID]] is calculated and inserted.
+
+2. **Generate the authorization key pair(s)**
+   [Authorized keys](#authorized-keys) are authorized to control (create, update,
+   deactivate) the log.
+
+   1. If the log is to use [[ref: pre-rotation]], additional key generation will
+      be necessary to generate the "next" authorization keys and their
+      corresponding [[ref: pre-rotation]] hashes.
+   2. For each authorization key pair, generate a [[ref: multikey]] based on the
+      public key. The [[ref: multikey]] representations are placed in the
+      `updateKeys` property in [[ref: parameters]].
+
+3. **Create the initial [[ref: state]] object**
+   The initial [[ref: state]] object is as defined by the [[ref: specialisation]].
+   Where the [[ref: SCID]] is to appear in the [[ref: state]] object, the
+   placeholder string `"{SCID}"` **MUST** be used.
+
+4. **Generate a preliminary log entry** JSON object containing the same JSON
+   properties that will be in the published [[ref: log entry]], but with some
+   values preset, pending calculation of the [[ref: SCID]] and [[ref:
+   entryHash]], and without the `proof`.
+
+   1. The value of `versionId` **MUST** be the placeholder literal `"{SCID}"`.
+   2. The value of `versionTime` **MUST** be a valid UTC [[ref: ISO8601]]
+      date/time string, and the represented time **MUST** be before or equal to
+      the current time.
+   3. The value of the `parameters` property **MUST** be a JSON object as
+      defined in the [VH-Log Parameters](#vh-log-parameters) section. All
+      required values in the first entry **MUST** be present. Where the [[ref:
+      SCID]] is referenced in the parameters, the placeholder literal string
+      `{SCID}` **MUST** be used.
+   4. The value of the `state` property **MUST** be the initial [[ref: state]]
+      object from the previous step.
+
+5. **Update the preliminary log entry to the initial log entry**
+
+   1. **Calculate the [[ref: SCID]]**
+      The preliminary JSON object **MUST** be used to calculate the [[ref: SCID]]
+      as defined in the
+      [SCID Generation and Verification](#scid-generation-and-verification)
+      section of this specification.
+   2. **Replace the placeholder `{SCID}`** Treating the preliminary JSON object
+      as a string, perform a literal text replacement of every occurrence of
+      the placeholder `{SCID}` with the calculated [[ref: SCID]].
+      - NOTE: The literal string `{SCID}` cannot appear as a value anywhere in
+        the first published [[ref: log entry]] — it will always be replaced.
+   3. **Calculate the [[ref: Entry Hash]]**
+      The updated preliminary JSON object **MUST** be used to calculate the
+      [[ref: Entry Hash]] (`entryHash`) as defined in the
+      [Entry Hash Generation and Verification](#entry-hash-generation-and-verification)
+      section of this specification.
+   4. **Replace the preliminary `versionId` value** The value of the `versionId`
+      property **MUST** be updated with the literal string `1` (for version
+      number 1), a literal `-`, followed by the `entryHash` value.
+   5. **Generate the [[ref: Data Integrity]] proof** A [[ref: Data Integrity]]
+      proof **MUST** be generated over the updated preliminary JSON object using
+      an authorized key in the `updateKeys` property in [[ref: parameters]] and
+      the `proofPurpose` set to `assertionMethod`.
+   6. **Add the [[ref: Data Integrity]] proof** The proof is added to the JSON
+      object. The resultant JSON object is the initial [[ref: log entry]].
+
+6. **Generate the first [[ref: JSON Line]]**
+   The [[ref: log entry]] **MUST** be serialised as a [[ref: JSON Lines]] entry
+   by removing extraneous white space and appending a newline character. The
+   result is stored as the initial contents of the log file.
+
+   If the [[ref: Log Controller]] has opted to use [[ref: witnesses]], the
+   required proofs **MUST** be collected and published in the witness file before
+   the log file is published. See the [Witnesses](#witnesses) section.
+
+7. **Publish the log**
+   The log file **MUST** be published at the location defined by the [[ref:
+   specialisation]].
+
+   If there are [[ref: watchers]] configured, a webhook is triggered to notify
+   the [[ref: watchers]] that a new log is available. See the
+   [Watchers](#watchers) section.
+
+#### Read (Resolve)
+
+The following steps **MUST** be executed to resolve the [[ref: state]] object
+for a given log:
+
+1. Retrieve the log file from the location defined by the [[ref: specialisation]].
+2. The log file **MUST** be processed as described below.
+
+To process the retrieved log file, the [[ref: Resolver]] **MUST** carry out the
+following steps on each [[ref: log entry]] in the order it appears in the file.
+Every step **MUST** be performed for **every** entry; in particular,
+[[ref: Data Integrity]] proof verification (step 2) and `entryHash` verification (step 3)
+**MUST NOT** be skipped for intermediate entries on the grounds that the
+[[ref: Resolver]] only needs the latest [[ref: state]] object.
+
+::: note Basic Note
+
+NOTE: A [[ref: Resolver]] implementation that caches previously verified state
+could retrieve only subsequent entries and resume processing after the last
+verified entry rather than reprocessing the full log, provided the cached state
+was itself produced by full verification and the cache has not been modified
+since.
+
+:::
+
+For each entry:
+
+1. Update the currently active [[ref: parameters]] with the [[ref: parameters]]
+   from the entry (if any). The `parameters` **MUST** adhere to the
+   [VH-Log Parameters](#vh-log-parameters) section. Continue processing using
+   the now active set of [[ref: parameters]].
+   - While all [[ref: parameters]] in the first [[ref: log entry]] take effect
+     immediately, some kinds of [[ref: parameters]] defined in later entries only
+     take effect *after* that entry has been published. For example, updates to
+     the `witnesses` array take effect only *after* the entry in which they are
+     defined has been published.
+2. The [[ref: Data Integrity]] proof in the entry **MUST** be valid and signed by
+   an authorized key as defined in the [Authorized Keys](#authorized-keys)
+   section, and with a `proofPurpose` set to `assertionMethod`.
+   1. If the [[ref: Log Controller]] has opted to use [[ref: witnesses]],
+      [[ref: Resolvers]] **MUST** retrieve and verify the witness file. For
+      details, see the [Witnesses](#witnesses) section.
+3. Verify the `versionId` for the entry.
+   1. The version number **MUST** be `1` for the first entry and **MUST** equal
+      the previous entry's version number + 1 for each subsequent entry. Gaps
+      **MUST** terminate resolution.
+   2. Exactly one dash `-` **MUST** follow the version number; missing or
+      multiple dashes **MUST** cause rejection.
+   3. The `entryHash` **MUST** follow the dash, **MUST** be a valid [[ref:
+      multihash]] in the algorithm permitted by the active `logVersion`, and
+      **MUST** be verified per
+      [Entry Hash Generation and Verification](#entry-hash-generation-and-verification).
+      Verification **MUST** be performed for every entry.
+4. The `versionTime` **MUST** be a valid UTC [[ref: ISO8601]] string with
+   explicit `Z` (or `+00:00`); values without a zone designator, or expressing
+   a non-UTC zone, **MUST** be rejected.
+   - The `versionTime` of **every** entry **MUST** be strictly greater than the
+     immediately preceding entry's. Equal timestamps **MUST** be rejected.
+   - The `versionTime` of every entry **MUST NOT** be more than a small,
+     implementation-defined tolerance in the future relative to the [[ref:
+     Resolver]]'s current time. [[ref: Resolvers]] **SHOULD** use a tolerance of
+     no more than 5 minutes. Entries that exceed this tolerance **MUST** cause
+     resolution to fail.
+5. When processing the first [[ref: log entry]], verify the [[ref: SCID]]
+   according to the
+   [SCID Generation and Verification](#scid-generation-and-verification)
+   section of this specification.
+6. Get the value of the [[ref: log entry]] property `state`, which is the
+   [[ref: state]] object for this version. The [[ref: specialisation]] **MAY**
+   define additional verification steps for the [[ref: state]] object.
+7. If [[ref: Key Pre-Rotation]] is active (the previously active `nextKeyHashes`
+   is non-empty), the entry being processed **MUST** include an explicit
+   `parameters.updateKeys` and **MUST NOT** rely on inheritance. The hash of
+   **every** [[ref: multikey]] in `parameters.updateKeys` (computed per
+   [Pre-Rotation Key Hash Generation and Verification](#pre-rotation-key-hash-generation-and-verification))
+   **MUST** appear in the previous entry's `nextKeyHashes`. A key not in the
+   previous entry's `nextKeyHashes` **MUST** cause resolution to terminate.
+8. As each [[ref: log entry]] is processed and verified, collect the following
+   information about each version:
+   1. The [[ref: state]] object.
+   2. The `versionId` of the [[ref: log entry]].
+   3. The UTC `versionTime` of the [[ref: log entry]].
+   4. The latest list of active [[ref: multikey]] formatted public keys
+      authorized to update the log, from the `updateKeys` lists in [[ref:
+      parameters]].
+   5. If [[ref: pre-rotation]] is being used, the hashes of authorized keys that
+      must be used in the `updateKeys` list of the next [[ref: log entry]].
+   6. All other VH-Log processing configuration settings as defined in the
+      `parameters` object.
+9. If the `parameters` for any of the versions define that some or all [[ref:
+   log entries]] must be [[ref: witnessed]], further verification of the [[ref:
+   witness]] proofs must be carried out, as defined in the
+   [Witnesses](#witnesses) section.
+
+10. Flag failed verifications appropriately, either invalidating the entire log
+    or marking all entries from the first invalid entry to the end of the log
+    as invalid.
+
+11. Respond to the resolution request:
+    1. If all verifications pass, return the resolved [[ref: state]] object.
+    2. If the request specifies a target version (by `versionId`, `versionTime`
+       or version number, as defined in [Selecting a
+       Version](#selecting-a-version)), return the [[ref: state]] object from
+       the [[ref: log entry]] that was active at that version or time — even if
+       later entries are invalid.
+    3. If the log or requested version is invalid, return an appropriate error.
+
+[[ref: Resolvers]] **SHOULD NOT** cache a log that fails verification.
+
+##### Selecting a Version
+
+A request to resolve a log **MAY** specify a target version in one of three
+ways. A [[ref: Resolver]] **MUST** support selecting by `versionId` and by
+`versionTime`, and **SHOULD** support selecting by version number. A request
+**MUST NOT** specify more than one. How a request specifies them (for example, as
+query parameters or resolution options) is defined by the
+[[ref: specialisation]].
+
+- **By `versionId`:** the [[ref: log entry]] whose `versionId` is exactly
+  equal to the given value.
+- **By `versionTime`:** the [[ref: log entry]] that was active at the given
+  [[ref: ISO8601]] time — the entry with the latest `versionTime` that is not
+  later than the given time.
+- **By version number:** the [[ref: log entry]] whose version number — the
+  integer that precedes the `-` in its `versionId` — equals the given positive
+  integer.
+
+If no [[ref: log entry]] matches, the [[ref: Resolver]] **MUST** return a
+not-found error, as defined by the [[ref: specialisation]].
+
+::: note
+Selecting by version number is less safe than selecting by `versionId`. A
+`versionId` includes the [[ref: entry hash]], so it identifies the content of
+exactly one [[ref: log entry]]. A version number identifies an entry only
+within the copy of the log being resolved: if two diverging copies of a log
+exist, the same version number can select different [[ref: state]] objects in
+each. Where a reference must identify exactly one version — for example, to
+record which version of the [[ref: state]] object was relied on — `versionId`
+is the safer choice.
+:::
+
+A [[ref: Resolver]] **MAY** use a [[ref: watcher]] in addition to, or in place
+of, retrieving the log from the source. See the [Watchers](#watchers) section.
+
+##### Resolution Result
+
+After successful resolution, the following information is available to the caller:
+
+- `versionId` — The `versionId` from the resolved [[ref: log entry]].
+- `versionTime` — The `versionTime` from the resolved [[ref: log entry]].
+- `created` — The [[ref: ISO8601]] timestamp of the log's first [[ref: log entry]].
+- `updated` — The [[ref: ISO8601]] timestamp of the log's last valid [[ref: log entry]].
+- `scid` — The [[ref: SCID]] of the log.
+- `deactivated` — A boolean indicating whether the log has been deactivated.
+- `ttl` — The suggested cache duration from the `ttl` [[ref: parameter]], in seconds.
+- `witness` — The current witness configuration object, if witnesses are active.
+- `watchers` — The current list of [[ref: watcher]] URLs.
+
+The "last valid [[ref: log entry]]" above refers to the case where resolution
+references a version that was valid but where later [[ref: log entries]] fail
+verification. If all entries pass verification, the last valid entry is the last
+entry in the log.
+
+#### Update
+
+To update a log, a new, verifiable [[ref: log entry]] must be generated, [[ref:
+witnessed]] (if necessary), appended to the existing log file, and published:
+
+1. Make the desired changes to the [[ref: state]] object.
+2. Define the [[ref: parameters]] JSON object to include any properties that
+   affect the evolution of the log. Any [[ref: parameters]] defined override the
+   previously active value; any not included imply the existing values remain in
+   effect. If no changes to [[ref: parameters]] are needed, an empty JSON object
+   `{}` **MUST** be used.
+   - While all [[ref: parameters]] in the first [[ref: log entry]] take effect
+     immediately, some types of [[ref: parameters]] defined in later entries only
+     take effect after the entry has been published. For example, rotating [[ref:
+     update keys]] or changing [[ref: witnesses]] takes effect only *after* the
+     entry in which they are defined has been published.
+3. Generate a preliminary [[ref: log entry]] JSON object:
+   1. The value of `versionId` **MUST** be the value of `versionId` from the
+      *previous* [[ref: log entry]].
+   2. The `versionTime` **MUST** be a [[ref: ISO8601]] format UTC timestamp
+      strictly greater than the previous entry's `versionTime`, and **MUST** be
+      the time the entry will be retrieved by a [[ref: witness]] or [[ref:
+      Resolver]], or before.
+   3. The [[ref: parameters]] as a JSON object.
+   4. The `state` JSON object set to the new version of the [[ref: state]] object.
+4. Calculate the new `versionId`, including incrementing the version number and
+   using the process in
+   [Entry Hash Generation and Verification](#entry-hash-generation-and-verification).
+5. Replace the `versionId` property with the value from the previous step.
+6. Generate a [[ref: Data Integrity]] proof using an authorized key as defined
+   in [Authorized Keys](#authorized-keys), with `proofPurpose` set to
+   `assertionMethod`.
+7. If [[ref: Key Pre-Rotation]] is being used, the hash of all `updateKeys`
+   entries **MUST** match a hash in `nextKeyHashes` from the previous [[ref: log entry]],
+   as defined in
+   [Pre-Rotation Key Hash Generation and Verification](#pre-rotation-key-hash-generation-and-verification).
+8. Add the proof JSON object as the value of the `proof` property.
+9. Serialise the entry as a [[ref: JSON Line]] by removing extra whitespace and
+   appending a `\n`.
+10. If [[ref: witnesses]] are active, collect the [[ref: threshold]] of proofs,
+    update and publish the witness file **BEFORE** publishing the updated log
+    file. See the [Witnesses](#witnesses) section.
+11. Append the new [[ref: log entry]] to the existing log file.
+12. Publish the updated log file at the location defined by the [[ref:
+    specialisation]]. If there are [[ref: watchers]] configured, trigger webhooks
+    to notify them. See the [Watchers](#watchers) section.
+
+#### Deactivate
+
+Deactivating a log allows a [[ref: Log Controller]] to signal that the log is no
+longer being maintained or updated.
+
+To deactivate a log explicitly, the [[ref: Log Controller]] **MUST** add
+`"deactivated": true` to the [[ref: log entry]] [[ref: parameters]]. Once done,
+a [[ref: Resolver]] **MUST** include `"deactivated": true` in the resolution
+metadata. A [[ref: Log Controller]] **MAY** also set `updateKeys` to `[]` to
+prevent further updates. If [[ref: pre-rotation]] is active, two [[ref: log entries]]
+are required: the first to stop pre-rotation, and the second to set
+`updateKeys` to `[]`.
+
+A [[ref: Log Controller]] may alternatively signal that a log is no longer being
+updated by setting `updateKeys` to `[]` without setting `deactivated: true`. The
+final [[ref: state]] continues to be returned, and the resolution metadata
+indicates that the log can no longer be updated.
+
+A [[ref: Log Controller]] can also remove the published log file. [[ref: Watchers]]
+monitoring a removed log **SHOULD** continue to cache the last known valid state
+indefinitely.
+
+### VH-Log Processes
+
+The [Log Operations](#log-operations) reference several processes executed during
+log entry generation and resolution verification. Each process is specified below.
+
+#### VH-Log Parameters
+
+All [[ref: log entries]] contain the JSON object `parameters`. This object
+defines the VH-Log processing [[ref: parameters]] used by the [[ref: Log Controller]]
+when publishing the current and subsequent [[ref: log entries]].
+[[ref: Resolvers]] **MUST** use the same [[ref: parameters]] to process the log.
+
+The `parameters` object **MUST** only include properties defined in the active
+version of the VH-Log specification, or properties defined by the active
+[[ref: specialisation]].
+
+##### General Rules for Parameters
+
+- **Default Values**: When the `logVersion` parameter sets the version of this
+  specification, any parameter introduced by that version but not explicitly set
+  in the same [[ref: log entry]] **MUST** assume the default value defined in
+  this section.
+
+- **Accumulation**: Parameters accumulate across entries. An entry that omits a
+  parameter inherits the previously active value, unless the parameter's
+  definition requires it to be explicitly set.
+
+- **Allowed Values**: Each parameter is constrained by the data type, structure,
+  and allowed values specified in this section. A non-conformant value **MUST**
+  cause [[ref: Resolvers]] to reject the [[ref: log entry]].
+
+- **Deactivation**: Parameters that support deactivation (such as `witness` or
+  `nextKeyHashes`) are set to defined values, described below, to indicate they
+  are no longer active.
+
+- The JSON `null` value **MUST NOT** be used to indicate default or deactivated
+  values, as it removes the typing information required for proper interpretation.
+
+:::note
+Some early `did:webvh` implementations used the JSON `null` value to indicate the
+deactivation of parameters such as `watchers`, `witness`, `updateKeys`,
+`nextKeyHashes`, and `ttl`. Although this usage is not valid per this
+specification, [[ref: Resolver]] implementations **SHOULD** gracefully accept
+`null` and convert it to the equivalent default value when processing log entries
+from legacy did:webvh logs.
+:::
+
+##### Specialisation-defined Parameters
+
+A [[ref: specialisation]] **MAY** define additional parameters beyond those
+listed in this section. Specialisation-defined parameter names **MUST NOT**
+conflict with VH-Log parameter names. A VH-Log [[ref: Resolver]] that does not
+implement a particular [[ref: specialisation]] **MUST** ignore unrecognised
+parameters rather than failing.
+
+::: example
+An example of the `parameters` property in the first [[ref: log entry]]:
+
+```json
+{
+  "logVersion": "vh-log:1.0",
+  "scid": "{SCID}",
+  "updateKeys": [
+    "z82LkqR25TU88tztBEiFydNf4fUPn8oWBANckcmuqgonz9TAbK9a7WGQ5dm7jyqyRMpaRAe"
+  ],
+  "nextKeyHashes": [
+    "enkkrohe5ccxyc7zghic6qux5inyzthg2tqka4b57kvtorysc3aa"
+  ]
+}
+```
+
+:::
+
+The following lists the [[ref: parameters]], their data types, and enumerated values.
+
+- `logVersion`: Specifies the VH-Log specification version to be used for
+  processing the log. Each value defines the cryptographic algorithms permitted
+  for the current and subsequent [[ref: log entries]].
+  - **MUST** appear in the first [[ref: log entry]] and **MUST** be one of the
+    enumerated acceptable values below.
+  - [[ref: Resolvers]] **MUST** reject any `logVersion` value that is not
+    **exactly** one of the acceptable values for the version(s) of this
+    specification the [[ref: Resolver]] supports. Unknown values **MUST NOT** be
+    silently downgraded, defaulted, or ignored — resolution **MUST** terminate.
+  - If not present in later entries, the previous value continues to be active.
+  - **MAY** appear in later entries to upgrade the spec version. A change to a
+    *lower* version than currently active **MUST** be rejected.
+  - A [[ref: specialisation]] **MAY** define its own version values for this
+    parameter (e.g., using the specialisation's own namespace prefix). Such
+    values **MUST** document the VH-Log base version they imply and the
+    cryptographic algorithms they permit.
+  - Acceptable values defined by this specification:
+    - `vh-log:1.0`
+      - Permitted hash algorithms: `SHA-256` [[spec:rfc6234]] (multihash code
+        `0x12`) **only**. Any other algorithm **MUST** cause resolution to
+        terminate.
+      - Permitted [[ref: Data Integrity]] cryptosuites for both log-entry proofs
+        and witness proofs: exactly `eddsa-jcs-2022` [[spec:di-eddsa-v1.0]].
+        [[ref: Resolvers]] **MUST** verify the proof's `cryptosuite` property; an
+        absent, mismatched, or non-conformant `cryptosuite` **MUST** cause the
+        entry to be rejected. Verifying only `proofPurpose` is **insufficient**.
+- `scid`: The [[ref: SCID]] value for the log.
+  - **MUST** appear in the first [[ref: log entry]].
+  - **MUST NOT** appear in later [[ref: log entries]].
+- `updateKeys`: A JSON array of [[ref: multikey]] formatted public keys whose
+  corresponding private keys are authorized to sign log entries that update the
+  log. See the [Authorized Keys](#authorized-keys) section for details.
+  - **MUST** appear in the first [[ref: log entry]] and **MAY** appear in
+    subsequent entries.
+  - If not present in later [[ref: log entries]], the previous value continues
+    to apply.
+  - A key from the active `updateKeys` array **MUST** be used to authorize each
+    [[ref: log entry]], where active is defined as follows:
+    - In the first [[ref: log entry]], the active `updateKeys` is the one defined
+      in that entry.
+    - In all other entries *without* [[ref: Key Pre-Rotation]] active, the active
+      `updateKeys` is that of the most recent **prior** [[ref: log entry]].
+    - In all other entries *with* [[ref: Key Pre-Rotation]] active, the active
+      `updateKeys` is that of the **current** [[ref: log entry]].
+  - `updateKeys` **SHOULD** be set to an empty array `[]` when deactivating the
+    log. See the [Deactivate](#deactivate) section for details.
+- `nextKeyHashes`: A JSON array of strings that are hashes of [[ref: multikey]]
+  formatted public keys that **MAY** be added to the `updateKeys` list in the
+  next [[ref: log entry]]. At least one entry of `nextKeyHashes` **MUST** be
+  added to the next `updateKeys` list.
+  - The process for generating the hashes and additional details are defined in
+    [Pre-Rotation Key Hash Generation and Verification](#pre-rotation-key-hash-generation-and-verification).
+  - If not set in the first [[ref: log entry]], defaults to an empty array (`[]`).
+  - If not set in other entries, retained from the most recent prior value.
+  - Once set to a non-empty array, [[ref: Key Pre-Rotation]] is active. While
+    active, **both** `nextKeyHashes` **AND** `updateKeys` **MUST** be present as
+    explicit properties in every subsequent [[ref: log entry]] until pre-rotation
+    is deactivated (by setting `nextKeyHashes` to `[]`). A subsequent entry that
+    omits `updateKeys` **MUST** be rejected by [[ref: Resolvers]], even if the
+    omission would otherwise inherit the previous value. Inheritance of
+    `updateKeys` is **never** permitted while pre-rotation is active.
+  - While [[ref: Key Pre-Rotation]] is active, **every** [[ref: multikey]] in
+    the current entry's `updateKeys` **MUST** have its hash in the previous
+    entry's `nextKeyHashes`.
+  - A [[ref: Log Controller]] **MAY** include extra hashes in `nextKeyHashes`
+    that are not subsequently used. Unused hashes are ignored.
+  - **MAY** be set to an empty array (`[]`) to deactivate [[ref: pre-rotation]].
+- `witness`: A JSON object declaring the set of [[ref: witnesses]] and threshold
+  number of witness proofs required to update the log. For details, see the
+  [Witnesses](#witnesses) section.
+  - Defaults to `{}` if not set in the first [[ref: log entry]].
+  - If not set in other entries, retained from the most recent prior value.
+  - If updated from `{}`, the change is immediately active and the corresponding
+    [[ref: log entry]] **MUST** be [[ref: witnessed]].
+  - **MAY** be set to `{}` to indicate witnesses are not (or no longer) being
+    used. If witnesses are active when set to `{}`, that [[ref: log entry]]
+    **MUST** be [[ref: witnessed]].
+- `watchers`: An optional entry whose value is a JSON array containing a list of
+  URLs ([[spec:rfc9110]]) identifying [[ref: watchers]] for the log. See the
+  [Watchers](#watchers) section.
+  - Defaults to `[]` if not set in the first [[ref: log entry]].
+  - If not set in other entries, retained from the most recent prior value.
+  - **MAY** be set to `[]` to indicate watchers are not (or no longer) being used.
+- `deactivated`: A JSON boolean indicating whether the log has been deactivated.
+  - Defaults to `false` if not set in the first [[ref: log entry]].
+  - If set to `true`, the log is considered deactivated and no further updates
+    are permitted.
+- `ttl`: An unsigned integer indicating how long, in seconds, a [[ref: Resolver]]
+  should cache the resolved [[ref: state]] before refreshing. Analogous to the
+  `TTL` parameter in DNS [[spec:rfc2181]]. Range 0 to 2^31.
+  - Defaults to `3600` (1 hour) if not set in the first [[ref: log entry]].
+  - If set to `0`, the log should not be cached.
+
+#### Cryptographic Agility
+
+VH-Log is designed to support cryptographic agility — the ability to adapt to
+evolving cryptographic algorithms and suites over time without breaking
+compatibility or requiring global coordination.
+
+Cryptographic agility is achieved through the following mechanisms:
+
+- **Self-describing cryptographic formats:** All cryptographically generated data
+  (e.g., hashes and signatures) use formats that encode the algorithm used.
+  Hashes use the [[ref: Multihash]] format, and signatures use
+  [[ref: Data Integrity]] Proofs, allowing verifiers to determine the algorithm from the data
+  itself.
+
+- **Specification versioning via the `logVersion` parameter:** Each [[ref: log entry]]
+  may include a `logVersion` parameter specifying the version of the
+  VH-Log specification in use. This parameter is required in the initial log
+  entry and may be updated in later entries to adopt newer versions.
+
+- **Version-specific algorithm policies:** Each version of this specification
+  defines the permitted cryptographic algorithms and suites, constraining what
+  [[ref: Log Controllers]] may use and limiting verification requirements on
+  [[ref: Resolvers]].
+
+- **Response to cryptographic vulnerabilities:** If flaws are identified in a
+  permitted algorithm, a new version of this specification will be released.
+  [[ref: Log Controllers]] may then rotate to the newer version by updating the
+  `logVersion` parameter.
+
+#### SCID Generation and Verification
+
+The [[ref: self-certifying identifier]] (SCID) is a required [[ref: parameter]]
+in the first [[ref: log entry]] and is a hash of the log's inception event.
+
+##### Generate SCID
+
+To generate the [[ref: SCID]] for a log, the [[ref: Log Controller]] **MUST**
+execute the following function:
+
+`base58btc(multihash(JCS(preliminary log entry with placeholders), <hash algorithm>))`
+
+Where:
+
+1. The `preliminary log entry with placeholders` is the pre-publication JSON
+   object of what will become the first [[ref: log entry]]. The placeholder is
+   the literal string "`{SCID}`".
+
+   - The `versionId` entry, which **MUST** be `{SCID}`.
+   - The `versionTime` entry, which **MUST** be a string that is the current
+     time in UTC [[ref: ISO8601]] format.
+   - The complete `parameters` for the initial [[ref: log entry]] as defined by
+     the [[ref: Log Controller]], with the placeholder wherever the [[ref: SCID]]
+     will eventually be placed.
+   - The `state` JSON object with the initial [[ref: state]] object, with the
+     placeholder `{SCID}` wherever the [[ref: SCID]] will eventually be placed.
+
+2. `JCS` is an implementation of the [[ref: JSON Canonicalization Scheme]]
+   [[spec:rfc8785]]. It outputs a canonicalized representation of its JSON input.
+3. `multihash` is an implementation of the [[ref: multihash]] specification. Its
+   output is a hash of the input using the `<hash algorithm>`, prefixed with a
+   hash algorithm identifier and the hash size.
+4. `<hash algorithm>` is the hash algorithm used by the [[ref: Log Controller]].
+   The hash algorithm **MUST** be one permitted by the active `logVersion`.
+5. `base58btc` is an implementation of the [[ref: base58btc]] function. Its
+   output is the base58 encoded string of its input.
+
+##### Verify SCID
+
+To verify the [[ref: SCID]] of a log being resolved, the [[ref: Resolver]]
+**MUST** execute the following process:
+
+1. Extract the first [[ref: log entry]] and use it for the rest of the steps.
+2. Extract the `scid` property value from the [[ref: parameters]] in the first
+   [[ref: log entry]].
+3. Determine the hash algorithm used by the [[ref: Log Controller]] from the
+   [[ref: multihash]] `scid` value. The hash algorithm **MUST** be one permitted
+   by the active `logVersion`.
+4. Remove the [[ref: data integrity]] proof property from the [[ref: log entry]].
+5. Replace the `versionId` property value with the literal `"{SCID}"`.
+6. Treat the resulting [[ref: log entry]] as a string and do a text replacement
+   of the `scid` value from Step 2 with the literal string `{SCID}`.
+7. Use the result and the hash algorithm (from Step 3) as input to the function
+   defined in the [Generate SCID](#generate-scid) section above.
+8. The output string **MUST** match the `scid` extracted in Step 2. If not,
+   terminate the resolution process with an error.
+
+#### Entry Hash Generation and Verification
+
+The `entryHash` follows the version number and dash character `-` in the
+`versionId` property in each log entry. Each `entryHash` is calculated across
+its [[ref: log entry]], excluding the [[ref: Data Integrity]] proof. The
+`versionId` used in the input to the hash is a predecessor value to the current
+[[ref: log entry]], ensuring that the [[ref: entries]] are cryptographically
+chained together in a microledger. For the first [[ref: log entry]], the
+predecessor `versionId` is the [[ref: SCID]] (itself a hash), while for all
+other entries it is the `versionId` from the previous log entry.
+
+##### Generate Entry Hash
+
+To generate the required hash for a [[ref: log entry]], the [[ref: Log Controller]]
+**MUST** execute the process
+`base58btc(multihash(JCS(entry), <hash algorithm>))` given a preliminary
+[[ref: log entry]] as the string `entry`, where:
+
+1. `JCS` is an implementation of the [[ref: JSON Canonicalization Scheme]]
+   ([[spec:rfc8785]]). Its output is a canonicalized representation of its input.
+2. `multihash` is an implementation of the [[ref: multihash]] specification. Its
+   output is a hash of the input using the `<hash algorithm>`, prefixed with a
+   hash algorithm identifier and the hash size.
+3. `<hash algorithm>` is the hash algorithm used by the [[ref: Log Controller]].
+   The hash algorithm **MUST** be one permitted by the active `logVersion`.
+4. `base58btc` is an implementation of the [[ref: base58btc]] function. Its
+   output is the base58 encoded string of its input.
+
+The following is an example of a preliminary [[ref: log entry]] processed to
+produce an [[ref: entry hash]]. As this is a first entry, the input `versionId`
+is the [[ref: SCID]] of the log.
+
+```json
+{"versionId": "QmdmPkUdYzbr9txmx8gM2rsHPgr5L6m3gHjJGAf4vUFoGE", "versionTime": "2025-04-01T17:39:50Z", "parameters": {"witness": {"threshold": 2, "witnesses": [{"id": "witness-1"}, {"id": "witness-2"}, {"id": "witness-3"}]}, "updateKeys": ["z6MkgzBDcBFV3sk4ypPE5YXMZHmS213A3HpYY2LmcVKV15jr"], "nextKeyHashes": ["QmZreDcjvWEpyRFznQeExWNCsvMLk5i59AcRJJuQC8UodJ"], "logVersion": "vh-log:1.0", "scid": "QmdmPkUdYzbr9txmx8gM2rsHPgr5L6m3gHjJGAf4vUFoGE"}, "state": {"id": "example:QmdmPkUdYzbr9txmx8gM2rsHPgr5L6m3gHjJGAf4vUFoGE"}}
+```
+
+Note: the above example uses placeholder witness identifiers. A [[ref:
+specialisation]] defines the required format for witness identifiers.
+
+Resulting [[ref: entryHash]]: `QmQ6FJ4fk2xheSSQoEjVpTgx9AQPKhJgtR9hn1nr4EeCrZ`
+
+##### Verify The Entry Hash
+
+To verify the `entryHash` for a given [[ref: log entry]], a [[ref: Resolver]]
+**MUST** execute the following process:
+
+1. Extract the `versionId` in the [[ref: log entry]], and remove from it the
+   version number and dash prefix, leaving the `entryHash` value.
+2. Determine the hash algorithm from the [[ref: multihash]] `entryHash` value.
+   The hash algorithm **MUST** be one permitted by the active `logVersion`.
+3. Remove the [[ref: Data Integrity]] `proof` from the [[ref: log entry]].
+4. Set the `versionId` in the entry object to be the `versionId` from the
+   previous [[ref: log entry]]. If this is the first entry, set the value to
+   the [[ref: SCID]] of the log.
+5. Calculate the hash string as
+   `base58btc(multihash(JCS(entry), <hash algorithm>))`, where:
+   1. `entry` is the data from the previous step.
+   2. `JCS` is an implementation of the [[ref: JSON Canonicalization Scheme]]
+      ([[spec:rfc8785]]).
+   3. `multihash` is an implementation of the [[ref: multihash]] specification.
+   4. `<hash algorithm>` is the hash algorithm from Step 2.
+   5. `base58btc` is an implementation of the [[ref: base58btc]] function.
+6. Verify that the calculated value matches the extracted `entryHash` from
+   Step 1. If not, terminate the resolution process with an error.
+
+#### Authorized Keys
+
+Each entry in the [[ref: log]] **MUST** include a [[ref: Data Integrity]] `proof`
+where, at minimum:
+
+1. `type` is `DataIntegrityProof`,
+2. `cryptosuite` **MUST** be one permitted by the active `logVersion`.
+3. `proofPurpose` is `assertionMethod`,
+4. `verificationMethod` resolves to a [[ref: multikey]] that appears verbatim in
+   the **active** `updateKeys`.
+
+[[ref: Resolvers]] **MUST** reject an entry whose proof fails *any* check. A
+structurally-valid signature over a different cryptosuite than allowed by the
+active `logVersion` **MUST NOT** be accepted.
+
+The authorized verification keys are the [[ref: multikey]]-formatted public keys
+in the **active** `updateKeys` list from the `parameters` property. Any of the
+authorized verification keys may be referenced in the [[ref: Data Integrity]]
+proof.
+
+For the first [[ref: log entry]], the **active** `updateKeys` is the one defined
+in that first entry.
+
+A [[ref: Resolver]] **MUST** verify that the key used for signing each [[ref:
+log entry]] is one from the list of active `updateKeys`. If not, terminate the
+resolution process with an error.
+
+The **active** `updateKeys` for subsequent entries depends on whether [[ref:
+Pre-Rotation]] is active:
+
+##### No Key Pre-Rotation
+
+For all subsequent entries, the **active** list is the most recent `updateKeys`
+**before** the [[ref: log entry]] to be verified. Thus, each [[ref: log entry]]
+is signed by the keys from the **previous** entry.
+
+##### Pre-Rotation Active
+
+For all subsequent entries, the **active** list is the `updateKeys` from the
+**current** [[ref: log entry]] to be verified. Thus, each [[ref: log entry]] is
+signed by the keys from the **current** entry.
+
+#### Pre-Rotation Key Hash Generation and Verification
+
+Pre-rotation requires a [[ref: Log Controller]] to commit to the authorization
+keys that will be used in the next [[ref: log entry]], without exposing those
+actual public keys. The purpose is that if the currently authorized keys are
+compromised, the attacker cannot rotate to new keys they control, because the
+next keys were already committed. Assuming the attacker has not also compromised
+the committed key pairs, they cannot rotate the authorization keys without
+detection.
+
+A [[ref: Log Controller]] **MAY** include the [[ref: parameter]] `nextKeyHashes`
+with a non-empty list in any [[ref: log entry]] to activate [[ref: pre-rotation]].
+
+A [[ref: Log Controller]] may turn off pre-rotation by setting `nextKeyHashes`
+to `[]` (empty array). If there is an active set of `nextKeyHashes` at the time,
+pre-rotation requirements remain in effect for that [[ref: log entry]]. The
+subsequent [[ref: log entry]] **MUST** use the non-pre-rotation rules.
+
+To create a hash to be included in the `nextKeyHashes` array, the [[ref: Log Controller]]
+**MUST** execute the following process for each possible future
+authorization key:
+
+1. Generate a new key pair. The key type **MUST** be compatible with the
+   cryptosuites permitted by the active `logVersion`.
+2. Generate a [[ref: multikey]] representation of the public key.
+3. Calculate the hash string as `base58btc(multihash(multikey))`, where:
+   1. `multikey` is the [[ref: multikey]] representation from Step 2.
+   2. `multihash` is an implementation of the [[ref: multihash]] specification.
+   3. `<hash algorithm>` is the hash algorithm used by the [[ref: Log Controller]],
+      which **MUST** be one permitted by the active `logVersion`.
+   4. `base58btc` is an implementation of the [[ref: base58btc]] function.
+4. Insert the calculated hash into the `nextKeyHashes` array within the
+   [[ref: parameters]] property.
+5. The generated key pair **SHOULD** be safely stored so that it can be used in
+   the next [[ref: log entry]].
+
+A [[ref: Log Controller]] **MAY** include extra hashes in `nextKeyHashes` that
+are not subsequently used. Unused hashes are ignored.
+
+After rotating from a pre-rotation public key, the corresponding private key
+**SHOULD** be treated as **spent** and **securely destroyed**.
+
+When processing other than the first [[ref: log entry]] where [[ref: pre-rotation]]
+is active, a [[ref: Resolver]] **MUST**:
+
+1. For each [[ref: multikey]] in the `updateKeys` property in the `parameters`
+   of the [[ref: log entry]], calculate the hash using the algorithm permitted
+   by the active `logVersion`.
+2. The resultant hash **MUST** be in the `nextKeyHashes` array from the previous
+   [[ref: log entry]]. If not, terminate the resolution process with an error.
+3. A new `nextKeyHashes` list **MUST** be in the `parameters` of the [[ref: log entry]]
+   currently being processed. If not, terminate the resolution process
+   with an error.
+
+#### Witnesses
+
+The [[ref: witness]] process provides a way for collaborators to work with the
+[[ref: Log Controller]] to "witness" the publication of new versions of the log.
+This specification defines the technical mechanism for using [[ref: witnesses]].
+Governance and policy questions about when and how to use the technical mechanism
+are outside the scope of this specification.
+
+[[ref: Witnesses]] can prevent a [[ref: Log Controller]] from updating or removing
+versions of a log without detection by the witnesses. With both the [[ref: Log Controller]]'s
+authorization key(s) and the log's hosting location compromised,
+a malicious actor might be able to take control of the log by rewriting its
+history. By adding [[ref: witnesses]] to monitor and approve each version update,
+a malicious actor cannot rewrite the previous history without having compromised
+a sufficient number of [[ref: witnesses]] as well.
+
+This protection depends on [[ref: witnesses]] behaving as this specification
+requires — in particular, approving only an entry that extends their own copy
+of the log (see [Witnessing a Log Entry
+Update](#witnessing-a-log-entry-update)). A witness proof shows only that a
+[[ref: witness]] approved an entry; a [[ref: Resolver]] cannot confirm how the
+[[ref: witness]] reached that decision. How far [[ref: witnesses]] are trusted
+is therefore a matter for the governance of the ecosystem. [[ref: Watchers]]
+provide a way to detect conflicting logs that does not depend on that trust;
+see [Watchers](#watchers).
+
+##### Witness Lists
+
+The list of witnesses that approve log updates is defined in the `witness`
+parameter, as described in the [VH-Log Parameters](#vh-log-parameters) section.
+After the first `witness` parameter has been set to other than `{}` (empty object),
+and while there are active witnesses, a [[ref: threshold]] of the active witnesses
+must provide valid proofs associated with each [[ref: log entry]] before the
+[[ref: log entry]] can be published. If a [[ref: log entry]] contains a
+replacement witness list, that new list becomes active **AFTER** the entry has
+been published.
+
+##### Witness Identity and Key Format
+
+The format of witness identifiers and the method for deriving the verification
+key from a witness identifier are defined by the [[ref: specialisation]]. The
+[[ref: specialisation]] **MUST** specify an identifier format from which the
+witness verification key can be derived without requiring external resolution,
+in order to maintain the tamper-evident properties of the log.
+
+##### The `witness` Parameter
+
+The `witness` element in a [[ref: parameters]] object has the following data
+structure:
+
+```json
+"witness": {
+  "threshold": n,
+  "witnesses": [
+    {
+      "id": "<witness identifier>"
+    }
+  ]
+}
+```
+
+where:
+
+- `threshold`: a positive integer (JSON number, no fractional part, value ≥ 1)
+  that **MUST** be attained or surpassed by the count of **distinct** verified
+  [[ref: witness]] approvals for a [[ref: log entry]] to be considered approved.
+  The `threshold` **MUST** be between 1 and the number of **distinct**
+  `witnesses[].id` values, inclusive. A `witness` parameter where `threshold`
+  is missing, non-integer, < 1, or > count(distinct ids) **MUST** be rejected;
+  [[ref: Resolvers]] **MUST NOT** silently coerce a malformed `witness` to
+  "no witnesses" — they **MUST** terminate resolution with an error.
+- `witnesses`: the array of [[ref: witnesses]] that **MUST** be non-empty, with
+  each entry including the field:
+  - `id`: (required) the identifier of the witness. The format is defined by
+    the [[ref: specialisation]]. Each `id` **MUST** be unique within the array
+    (compared byte-for-byte after Unicode NFC normalisation). Each `id`
+    contributes at most one approval to threshold counting, regardless of how
+    many proofs are attributed to it.
+
+##### Witness Threshold Algorithm
+
+The use of the [[ref: threshold]] (rather than requiring all [[ref: witnesses]])
+prevents faulty witnesses from blocking publication. To determine if the [[ref:
+threshold]] has been met, participants **MUST**:
+
+1. Verify each [[ref: Data Integrity]] proof in the witness file for the relevant
+   `versionId` independently.
+2. Attribute each verified proof to a witness `id` from the **active**
+   `witnesses` list. Proofs that cannot be attributed **MUST** be discarded.
+3. Form the set of **distinct** attributed `id` values. The threshold check
+   applies to the size of this set, not to the raw proof count.
+4. If `|set| ≥ threshold`, the update is "[[ref: witnessed]]"; otherwise
+   resolution **MUST** terminate with an error.
+
+##### The Witness Proofs File
+
+Proofs from [[ref: witnesses]] are placed into a separate file from the log file.
+The default name of the witness file is `vh-log-witness.json`. A [[ref:
+specialisation]] **MAY** define a different name. The media type of the file
+**SHOULD** be `application/json`.
+
+The data model for the witness file is:
+
+```json
+[
+  {
+    "versionId": "1-Qmba111111...",
+    "proof": [{ ... }, { ... }]
+  },
+  {
+    "versionId": "2-Qzmb222222...",
+    "proof": [{ ... }, { ... }]
+  }
+]
+```
+
+Where:
+
+- `versionId` is the `versionId` of the [[ref: log entry]] to which the
+  [[ref: witness]] proofs apply.
+- `proof` is an array of [[ref: Data Integrity]] proofs. The permitted [[ref:
+  Data Integrity]] cryptosuite **MUST** be one permitted by the active
+  `logVersion`, and the `proofPurpose` **MUST** be set to `assertionMethod`.
+
+The method for deriving the witness verification key from the witness identifier
+and for verifying witness proofs is defined by the [[ref: specialisation]].
+
+A valid proof from a [[ref: witness]] carries the implication that **ALL** prior
+[[ref: log entries]] are also approved by that witness. To maintain a manageable
+witness file size, the [[ref: Log Controller]] **SHOULD** remove older proofs for
+**published** [[ref: log entries]], keeping only the latest proof for each witness.
+
+To eliminate the race condition in publishing the log file and witness file, when
+a new [[ref: log entry]] is being added, [[ref: witness]] proofs **MUST** be
+added to the witness file and that file published **BEFORE** publishing the
+updated log file. As a result, [[ref: Resolvers]] may find proofs for unpublished
+[[ref: log entries]] in the witness file. [[ref: Resolvers]] **MUST** ignore
+proofs with `versionId`s not in the log file.
+
+To avoid unnecessary clutter in the witness file, array entries without proofs
+(containing only the `versionId`) **SHOULD** be removed.
+
+##### Witnessing a Log Entry Update
+
+The following process is used to witness a log entry update:
+
+- The [[ref: Log Controller]] prepares the full [[ref: log entry]] (including the
+  `proof` element) for the new version, and shares it with the active [[ref:
+  witnesses]]. The specification leaves to implementers how the [[ref: log entry]]
+  data is provided to the [[ref: witnesses]].
+- Each [[ref: witness]] **MUST** hold its own copy of the published log file prior
+  to witnessing, and **MUST** confirm that the controller-supplied candidate entry
+  verifies as the next entry to that log.
+- Each [[ref: witness]] **MUST** independently verify the candidate entry using
+  every step in [Read (Resolve)](#read-resolve). Any failure **MUST** cause the
+  witness to refuse approval.
+- Each [[ref: witness]] determines (based on the governance of the ecosystem)
+  if they approve of the update.
+- If the verification is successful and approval is granted, the [[ref: witness]]
+  creates and sends to the [[ref: Log Controller]] a [[ref: Data Integrity]] proof
+  signed using the witness's key. The specification leaves to implementers how
+  [[ref: witness]] proofs are sent to the [[ref: Log Controller]].
+- The [[ref: Log Controller]] **MUST** add the proof to the record for the
+  applicable `versionId` in the witness file.
+  - The [[ref: Log Controller]] **MAY** publish the updated witness file as new
+    proofs are added.
+  - The [[ref: Log Controller]] **MUST** publish the updated witness file
+    **after** a [[ref: threshold]] of proofs have been received and **before** the
+    witnessed log file is published.
+
+::: note
+A [[ref: Resolver]] can verify that a [[ref: threshold]] of
+[[ref: witnesses]] signed an entry, but not that each [[ref: witness]] held
+its own copy of the log or checked the entry against it. The requirements on
+[[ref: witnesses]] above define correct behaviour; whether a given
+[[ref: witness]] meets them is a matter of trust in that [[ref: witness]].
+:::
+
+##### Verifying Witness Proofs During Resolution
+
+A [[ref: Resolver]] **MUST** verify that all [[ref: log entries]] that have active
+[[ref: witnesses]] have a [[ref: threshold]] of approving witnesses. [[ref:
+Resolvers]] **MUST**:
+
+1. Complete all non-witness verifications of the log file **before** processing
+   any witness proof. Witness verification **MUST NOT** substitute for entry-hash
+   or signature verification.
+2. Retrieve the witness file.
+3. For each entry in the witness file, confirm its `versionId` matches a
+   `versionId` present in this log file. Non-matching entries, including those
+   for future entries, **MUST** be discarded.
+4. Verify enough proofs to meet the [[ref: threshold]] for all entries requiring
+   witnessing.
+5. For each entry requiring witnessing, confirm a threshold of verified,
+   distinct-witness proofs whose `versionId` matches the current or any later
+   published entry. Otherwise, terminate with an error.
+
+#### Watchers
+
+[[ref: Watchers]] are components found in some trust ecosystems that monitor logs
+on behalf of clients for various purposes, such as:
+
+- **Caching verified logs:** Storing verified [[ref: state]] objects to facilitate
+  efficient resolution.
+- **Ensuring persistence:** Maintaining access to logs even after removal by
+  the [[ref: Log Controller]].
+- **Detecting inconsistencies:** Identifying malicious behavior by the [[ref: Log Controller]],
+  such as republishing altered logs, or giving different parties conflicting
+  logs (duplicity). A [[ref: watcher]] does this by retrieving the log from
+  each source it knows of and checking that each copy extends the copy it
+  holds. This is the most reliable way to detect duplicity, because it does
+  not depend on trusting the [[ref: Log Controller]] or the
+  [[ref: witnesses]], but it costs a retrieval and verification of the log on
+  each check, and detects only the copies the [[ref: watcher]] sees. A network
+  of [[ref: watchers]] can reach consensus independently of
+  [[ref: witnesses]].
+
+Any party may set up a [[ref: watcher]] for a log, without the involvement of
+the [[ref: Log Controller]] and without being listed in the log — for example,
+a relying party that wants a check independent of the [[ref: Log Controller]].
+A [[ref: Log Controller]] may also opt to collaborate with specific [[ref: watchers]] by publishing
+their URIs in the [[ref: parameters]] of [[ref: log entries]]. It is outside the
+scope of this specification how a [[ref: Log Controller]] requests a [[ref:
+watcher]] to monitor a log or how a [[ref: watcher]] requests inclusion in the
+log.
+
+The governance of [[ref: watchers]] is out of scope for this specification, which
+defines only the technical mechanisms for notifying and querying [[ref: watcher]]
+services.
+
+##### Publishing Watcher URLs
+
+VH-Log provides a mechanism for notifying [[ref: Resolvers]] about configured
+[[ref: watchers]]. The `watchers` [[ref: parameter]] lists URIs identifying the
+log's [[ref: watchers]].
+
+When resolving a log, [[ref: Resolvers]] **MUST** provide the active list of
+[[ref: watchers]] in the resolution result metadata, as noted in the
+[Read (Resolve)](#read-resolve) section.
+
+If a `watchers` entry is included in a [[ref: log entry]], it replaces the active
+set of [[ref: watchers]].
+
+If a new [[ref: watcher]] is added after a log has existed for some time, the
+[[ref: Log Controller]] **SHOULD** notify the new [[ref: watcher]] about
+previously created log resources.
+
+[[ref: Watchers]] do not need to be listed in the log. [[ref: Watchers]] can
+operate independently of the [[ref: Log Controller]] by polling for updates.
+[[ref: Log Controllers]] **MAY** send notifications to [[ref: watchers]] that
+they are aware of but do not list in the log.
+
+##### Watcher Endpoints and Behavior
+
+A [[ref: watcher]] is a web server accessible via HTTP that **MUST** support the
+following capabilities:
+
+- **Client Requests:**
+  - Retrieve the log file for a given [[ref: SCID]].
+  - Retrieve the witness file for a given [[ref: SCID]].
+  - Retrieve a resource for a given [[ref: SCID]] and resource path.
+- **Notifications (typically from the [[ref: Log Controller]]):**
+  - Notify the [[ref: watcher]] about a new log entry.
+  - Notify the [[ref: watcher]] about a new or updated log resource.
+  - Request removal of a given [[ref: SCID]] from the [[ref: watcher]]'s cache.
+  - Request removal of a given resource from the [[ref: watcher]]'s cache.
+
+##### Watcher HTTP API Operations
+
+The following HTTP API operations define the interaction between [[ref: watchers]]
+and other components:
+
+- **GET `<WATCHER URL>/log?scid=<SCID>`**: Returns the latest log file for the
+  given [[ref: SCID]].
+- **POST `<WATCHER URL>/log?id=<log identifier>`**: Notifies the [[ref: watcher]]
+  of a log update, prompting retrieval of the latest log and witness files. The
+  [[ref: watcher]] is expected to index the log using its [[ref: SCID]].
+- **POST `<WATCHER URL>/log/delete?scid=<SCID>`**: Notifies the [[ref: watcher]]
+  that the given `<SCID>` should be deleted from its cache. The body **MAY**
+  contain a [[ref: Data Integrity]] proof from the requester for the [[ref:
+  Watcher]] to use when deciding on the legitimacy of the request. The [[ref:
+  Watcher]] will act (or not) according to its governance. This endpoint may be
+  used to fulfill a "right to be forgotten" request.
+- **GET `<WATCHER URL>/witness?scid=<SCID>`**: Returns the latest witness file
+  for the given [[ref: SCID]].
+- **GET `<WATCHER URL>/resource?scid=<SCID>&path=<resourcePath>`**: Retrieves
+  the requested resource.
+- **POST `<WATCHER URL>/resource?scid=<SCID>&path=<resourcePath>`**: Notifies
+  the [[ref: watcher]] of a new or updated resource.
+- **POST `<WATCHER URL>/resource/delete?scid=<SCID>&path=<resourcePath>`**:
+  Notifies the [[ref: watcher]] that the given resource should be deleted from
+  its cache.
