@@ -43,7 +43,7 @@ extracts that mechanism from its DID-specific context so it can serve as a
 reusable foundation for other specifications.
 
 The first [[ref: specialisation]] of VH-Log is the [did:vh DID
-Method](../didvh-next/index.html), in which the [[ref: state]] object is a W3C
+Method](https://swcurran.github.io/didvh/), in which the [[ref: state]] object is a W3C
 DID Document and the DID is just `did:vh:<SCID>`. A did:vh DID contains no
 location, so a client can source its log — get the log itself, or a
 reference to it — from anywhere: the context in which the DID was received, a

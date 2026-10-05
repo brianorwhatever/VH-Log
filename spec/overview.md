@@ -64,7 +64,7 @@ algorithm. The [[ref: state]] type, the log's location and resource naming
 conventions, and any additional constraints or features are left to be defined by
 a **specialisation** — a specification that uses VH-Log as its foundation.
 
-For example, the [did:vh specification](../didvh-next/index.html) is a
+For example, the [did:vh specification](https://swcurran.github.io/didvh/) is a
 specialisation of VH-Log in which:
 
 - The [[ref: state]] is a W3C DID Document.
