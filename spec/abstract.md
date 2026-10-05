@@ -50,7 +50,7 @@ reference to it — from anywhere: the context in which the DID was received, a
 [[ref: watcher]], a peer, or a web location. Either is passed to the resolver
 as DID resolution options, and the log is verified in the same way.
 
-The [did:webvh specification](../didwebvh-next/index.html) is being updated as
-a second [[ref: specialisation]], redefining did:webvh as VH-Log with the
-[[ref: state]] object constrained to a W3C DID Document and the log located via
-a DID-to-HTTPS transformation.
+VH-Log was extracted from the [did:webvh specification](https://identity.foundation/didwebvh/), which
+is expected to be redefined in a future version as a [[ref: specialisation]]
+of VH-Log, with the [[ref: state]] object constrained to a W3C DID Document and
+the log located via a DID-to-HTTPS transformation.

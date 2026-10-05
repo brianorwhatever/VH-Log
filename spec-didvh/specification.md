@@ -35,7 +35,7 @@ only what is specific to `did:vh`, and implementers **MUST** consult
 - Defining the DID method identifier, CRUD operations and DID URL handling.
 
 `did:vh` is deliberately as close to
-[`did:webvh`](../didwebvh-next/index.html) as its lack of a location allows.
+[`did:webvh`](https://identity.foundation/didwebvh/) as its lack of a location allows.
 The differences are:
 
 | | `did:webvh` | `did:vh` |

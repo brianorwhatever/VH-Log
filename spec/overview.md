@@ -79,8 +79,9 @@ specialisation of VH-Log in which:
 - The `method` parameter (a did:vh-specific parameter) specifies the
   did:vh spec version and implies the VH-Log base version.
 
-The [did:webvh specification](../didwebvh-next/index.html) is a closely related
-specialisation that differs mainly in placing a domain and path in the DID and
+The [did:webvh specification](https://identity.foundation/didwebvh/), from which VH-Log was extracted,
+is closely related and is expected to become a VH-Log specialisation in a
+future version. It differs from did:vh mainly in placing a domain and path in the DID and
 locating the log via a DID-to-HTTPS transformation.
 
 A specialisation **MAY** define additional [[ref: parameters]], additional

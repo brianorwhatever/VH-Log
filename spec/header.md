@@ -21,6 +21,6 @@ Verifiable History Log (VH-Log)<br>v0.1 / Editors Draft
 
 **Specialisations:**
 ~ [did:vh](../didvh-next/index.html) — the first specialisation
-~ [did:webvh](../didwebvh-next/index.html)
+~ [did:webvh](https://identity.foundation/didwebvh/) — planned; VH-Log was extracted from it
 
 ------------------------------------

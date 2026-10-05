@@ -18,6 +18,6 @@ The `did:vh` DID Method<br>v0.1 / Editors Draft
 
 **Related Specifications:**
 ~ [VH-Log](../next/index.html) — the log mechanism `did:vh` specialises
-~ [did:webvh](../didwebvh-next/index.html) — the web-located sibling of `did:vh`
+~ [did:webvh](https://identity.foundation/didwebvh/) — the web-located sibling of `did:vh`
 
 ------------------------------------
