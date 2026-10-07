@@ -1,7 +1,7 @@
 Verifiable History Log (VH-Log)<br>v0.1 / Editors Draft
 ==================
 
-**Specification Status:** Pre-Draft — Editors Draft
+**Specification Status:** Editors Draft
 
 **Specification Version:** v0.1 (see [Changelog](#vh-log-version-changelog))
 

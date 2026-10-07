@@ -13,7 +13,7 @@ is a specification of mechanisms for ensuring the authenticity and integrity of
 structured digital documents using cryptography, such as digital signatures and
 other digital mathematical proofs.
 
-[[def: Entry Hash, entryHash, entry hashes]]
+[[def: Entry Hash, entry hashes]]
 
 ~ A VH-Log entry hash is a hash generated using a formally defined process over
 the input data of a [[ref: log entry]], excluding the [[ref: Data Integrity]]
@@ -61,11 +61,15 @@ of the [[ref: state]] object. Each entry contains a `versionId`, `versionTime`,
 
 [[def: logVersion]]
 
-~ The VH-Log [[ref: parameter]] that identifies the version of the VH-Log
+~ The VH-Log version [[ref: parameter]]. It identifies the version of the
 specification in use and defines the permitted cryptographic algorithms (hash
 algorithm and [[ref: Data Integrity]] cryptosuite) for the current and subsequent
-[[ref: log entries]]. Required in the first [[ref: log entry]]. Analogous to —
-but distinct from — the `method` parameter used in did:webvh logs.
+[[ref: log entries]]. Required in the first [[ref: log entry]]. A
+[[ref: specialisation]] may designate its own parameter in its place, such as the
+`method` parameter of did:webvh and did:vh, whose values identify a version of
+the specialisation and the VH-Log version it implies. Where this specification
+refers to logVersion, it means the designated parameter if there is one. See
+[VH-Log Parameters](#vh-log-parameters).
 
 [[def: multibase]]
 

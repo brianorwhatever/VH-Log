@@ -32,14 +32,17 @@ The following classes of attack apply to all log operations:
   newer entries and presenting a stale state. Mitigations include:
     - **Resolver cache-and-compare:** a [[ref: Resolver]] that remembers the
       latest `versionId` it has seen for a log can detect a truncated copy (see
-      [Read (Resolve)](#read-resolve)).
+      [Comparing Copies of a Log](#comparing-copies-of-a-log)).
     - **Witness verification:** where [[ref: Log Controllers]] use witnesses,
       [[ref: Resolvers]] verify that every entry is properly witnessed, and
       ignore witness proofs for unpublished or truncated entries (see
       [Verifying Witness Proofs During
       Resolution](#verifying-witness-proofs-during-resolution)).
-    - **Multi-source resolution:** a [[ref: Resolver]] or client can retrieve
-      the log from multiple [[ref: Watchers]] and compare the latest entries.
+    - **Multi-source resolution:** a client can ask a [[ref: Resolver]] to
+      retrieve the log from [[ref: watchers]] and compare the copies, using the
+      `checkWatchers`, `extraWatchers` and `minCopies`
+      [resolution options](#resolution-options). Copies that are behind are
+      reported in the [Resolution Result](#resolution-result).
     - **End-to-end TLS:** while signatures detect per-entry tampering, TLS
       reduces opportunities for active truncation in transit.
 
@@ -82,14 +85,24 @@ The following classes of attack apply to all log operations:
   Update](#witnessing-a-log-entry-update)), and the witness file to contain no
   conflicting proofs ([The Witness Proofs File](#the-witness-proofs-file)).
   [[ref: Resolvers]] that remember the latest version they have seen can detect
-  older branches ([Read (Resolve)](#read-resolve)), and [[ref: watchers]] report
-  divergence across sources ([Watchers](#watchers)). Because no other party can
-  verify that a witness has followed these rules, detecting split views
-  ultimately relies on [[ref: watchers]] — which any party may run — comparing
-  copies of the log from multiple sources.
+  older branches, and [[ref: Resolvers]] given more than one copy fail
+  resolution when the copies diverge
+  ([Comparing Copies of a Log](#comparing-copies-of-a-log)). [[ref: Watchers]]
+  report divergence across sources ([Watchers](#watchers)). Because no other
+  party can verify that a witness has followed these rules, detecting split
+  views ultimately relies on comparing copies of the log from multiple sources,
+  whether by [[ref: watchers]], which any party may run, or by a
+  [[ref: Resolver]] asked to check them. [[ref: Watchers]] listed in the log
+  are chosen by the [[ref: Log Controller]], so the `extraWatchers`
+  [resolution option](#resolution-options), naming [[ref: watchers]] the
+  caller chooses, gives the stronger check against a [[ref: Log Controller]]
+  showing different logs to different parties.
 
 - **Server-Side Request Forgery (SSRF)** — A resolver acts as an HTTP client
-  for a location derived from an untrusted log identifier. The transport
+  for a location derived from an untrusted log identifier, and, with the
+  `extraWatchers` [resolution option](#resolution-options), for
+  [[ref: watcher]] URLs supplied by its caller. A [[ref: Resolver]] offered as
+  a service can refuse or limit `extraWatchers`. The transport
   checks in [Retrieving Log Resources](#retrieving-log-resources) are standard
   SSRF defences. They are stated normatively because common implementations
   have been found vulnerable to at least one of: following redirects,
@@ -192,7 +205,7 @@ must never be exposed in the log (see [Authorized Keys](#authorized-keys)).
 
 VH-Log uses standard [[ref: Data Integrity]] proof mechanisms for signing log
 entries and witness proofs, as defined in the cryptographic suite used. The
-cryptosuites permitted for each `logVersion` are listed in [VH-Log
+cryptosuites permitted for each [[ref: logVersion]] are listed in [VH-Log
 Parameters](#vh-log-parameters).
 
 ### Cross-Origin Resource Sharing (CORS)
@@ -244,15 +257,15 @@ decoding (`.`, `..`, `/`, `\`, NUL, leading/trailing whitespace); enforce max
 response size with `Content-Length` first; enforce a wall-clock timeout.
 
 **Log structure:** unbroken `1, 2, 3, ...` version sequence; strictly increasing
-UTC ISO8601 `versionTime`; every `versionTime` ≤ now (bounded skew); `entryHash`
-chain verified for every entry; `logVersion` is an explicitly supported value
+UTC ISO8601 `versionTime`; every `versionTime` ≤ now (bounded skew);
+[[ref: entry hash]] chain verified for every entry; [[ref: logVersion]] is an explicitly supported value
 (never silently downgraded).
 
 **SCID & identity:** first entry's `parameters.scid` is the genesis self-hash;
 [[ref: SCID]] never changes.
 
 **Keys & proofs:** every proof has `type: DataIntegrityProof`, the `cryptosuite`
-and `proofPurpose` required by the active `logVersion`; `verificationMethod` key
+and `proofPurpose` required by the active [[ref: logVersion]]; `verificationMethod` key
 in active `updateKeys`; under pre-rotation, `updateKeys` explicit in every entry
 and every key hashes to a value in previous `nextKeyHashes`.
 

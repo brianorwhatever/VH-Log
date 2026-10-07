@@ -9,9 +9,10 @@ The following lists the substantive changes in each version of the specification
     - `state` is defined as an arbitrary JSON object rather than a DIDDoc.
     - The log file resource name (`vh-log.jsonl`) and witness file resource name
       are generalised; specialisations may define their own names.
-    - The `method` parameter (did:webvh-specific) is replaced by `logVersion`
-      (`vh-log:1.0`), which defines the VH-Log spec version and permitted
-      cryptographic algorithms.
+    - The did:webvh `method` parameter is generalised as the version
+      parameter, `logVersion` (`vh-log:1.0`), which defines the spec version and
+      permitted cryptographic algorithms. A specialisation may designate its
+      own parameter in its place, as did:webvh and did:vh do with `method`.
     - Witness identity and key format are specialisation-defined rather than
       requiring `did:key` DIDs.
     - The DID-to-HTTPS transformation, DID URL resolution, `/whois`, and

@@ -11,12 +11,13 @@ VH-Log provides the following features:
 
 - An append-only [[ref: log]] of [[ref: log entries]], each representing a new
   version of the [[ref: state]] object.
-- Cryptographic chaining: each entry's [[ref: versionId]] is derived from a hash
-  of the entry's content, which includes the previous entry's [[ref: versionId]],
-  linking all entries together in a microledger.
 - A [[ref: Self-Certifying Identifier]] (SCID) derived from the genesis entry and
   embedded in the log's identifier, enabling any verifier to confirm that a given
   log is the authentic log for that identifier.
+- Cryptographic chaining: each entry's [[ref: versionId]] is derived from a hash
+  of the entry's content, which includes the previous entry's [[ref: versionId]]
+  (for the genesis entry, the [[ref: SCID]]), linking all entries together in a
+  microledger.
 - A [[ref: parameters]] mechanism allowing per-entry configuration — such as
   authorised [[ref: update keys]], [[ref: next key hashes]] for key pre-rotation,
   and [[ref: witnesses]] — to evolve over the lifetime of the log.

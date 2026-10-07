@@ -43,6 +43,13 @@ verifiable history of a versioned object.
 - **[did:webvh](https://identity.foundation/didwebvh/)** — VH-Log was extracted
   from the log mechanism of the did:webvh v1.0 specification. A future version
   of did:webvh is expected to be defined as a specialisation of VH-Log.
+  - Generalised into VH-Log: the log entry structure, the cryptographic
+    chaining, the SCID, the `parameters` mechanism, witnesses, watchers and the
+    resolution algorithm.
+  - Left to specialisations: the type of the `state` object (a DID Document
+    for DID methods), resource names (VH-Log's defaults are `vh-log.jsonl` and
+    the witness file; did:webvh uses `did.jsonl` and `did-witness.json`), and
+    identifier and URL syntax, such as DID URL query parameters.
 - **[did:vh](https://swcurran.github.io/didvh/)** — the first specialisation of
   VH-Log. The `state` object is a W3C DID Document and the DID is just
   `did:vh:<SCID>`, with no location component, so the DID's log can be sourced
@@ -74,11 +81,48 @@ needed on machines where IPv6 is broken and is harmless elsewhere.
 The specification is in [Spec-Up] format (v0.11.6 from npm). See the
 [Spec-Up Documentation] for a list of Spec-Up features and functionality.
 
+### Repository Layout
+
+```text
+spec/               # Specification source (Spec-Up Markdown)
+  header.md         #   title, status, editors
+  abstract.md
+  overview.md
+  specification.md  #   the normative body
+  security_and_privacy.md
+  definitions.md    #   terminology ([[def:]] terms)
+  references.md
+  version.md        #   changelog
+specs.json          # Spec-Up configuration, including `spec_refs`
+spec-refs.mjs       # Spec-Up plugin that adds `spec_refs` to [[spec:]] lookups
+render.mjs          # Render once (npm run render)
+edit.mjs            # Render on change (npm run edit)
+index.html          # Redirect to the rendered spec in next/
+next/               # Rendered output (git-ignored)
+```
+
+### External References
+
+References not in Spec-Up's bundled reference data are added to the
+`spec_refs` array in `specs.json`, with entries of the form
+`{ "name": { "href", "title", "rawDate", "authors", "status" } }`. The
+`spec-refs.mjs` plugin makes them available to `[[spec:name]]` references.
+
+### Heading Anchors
+
+Specialisations in other repositories, such as did:vh, link to sections of
+this specification by URL anchor (for example,
+`https://swcurran.github.io/VH-Log/next/index.html#resolution-options`).
+Spec-Up derives anchors from heading text, so renaming a heading breaks those
+links. Avoid renaming headings, or update the specialisations when you do.
+
 [Spec-Up]: https://github.com/decentralized-identity/spec-up
 [Spec-Up Documentation]: https://identity.foundation/spec-up/
 
 ## Publishing
 
-On each push to `main`, the `spec-up-render` GitHub Action renders the spec and
-publishes the result to the `gh-pages` branch, which GitHub Pages serves. The
-root `index.html` redirects to the Editors Draft in `next/`.
+On each push to `main`, the `spec-up-render` GitHub Action
+(`.github/workflows/render-specs.yml`) renders the spec and publishes the
+working tree, including the rendered `next/` folder, to the `gh-pages` branch,
+which GitHub Pages serves. The root `index.html` redirects to the Editors Draft
+in `next/`.

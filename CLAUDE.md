@@ -1,149 +1,27 @@
 # CLAUDE.md — vh-log-spec
 
-## Purpose
+## About This Repository
 
-This repository contains the **Verifiable History Log (VH Log)** specification. VH Log is a
-general-purpose, append-only, cryptographically chained log structure for recording the history
-of a versioned state object. It is a clean extraction and generalisation of the log mechanism
-defined in the [did:webvh specification](https://identity.foundation/didwebvh/), with the goal
-that did:webvh (and other specifications) can be defined as specialisations of VH Log.
+See [README.md](README.md) for what VH-Log is, its status, its relationship to did:webvh
+and did:vh, the repository layout, how to render the spec, how to add external
+references, and how publishing works. Don't repeat that material here; update the README
+instead. The spec itself (`spec/`) is the authority on how VH-Log works.
 
-Work here is pre-standard and should be treated as a working draft. The Editors Draft is
-published at <https://swcurran.github.io/VH-Log/>.
+## Notes for Claude
 
-## Relationship to did:webvh
-
-VH Log extracts the following from did:webvh and generalises them:
-
-- The log entry structure (`versionId`, `versionTime`, `parameters`, `state`, `proof`)
-- The cryptographic chaining mechanism (each entry's `versionId` is derived from a hash of
-  the entry content, chaining entries together)
-- The Self-Certifying Identifier (SCID) — derived from the genesis entry, embedded in the
-  log's identifier, and used to verify log authenticity
-- The witness mechanism (threshold of external proofs required per entry)
-- The watcher role (parties that archive and re-serve logs)
-- The resolution algorithm (deriving the current or historical `state` from log entries)
-- The `parameters` mechanism (per-entry configuration such as `updateKeys`, `nextKeyHashes`,
-  `witnesses`, `deactivated`, `ttl`)
-
-Things that remain DID-specific and are NOT in VH Log:
-
-- The resource naming convention `did.jsonl` — VH Log uses generic `vh-log.jsonl` or
-  allows the specialisation to specify the resource name
-- The `did-witness.json` resource name — specialisation-specific
-- DID URL resolution (`versionTime`, `versionId` query parameters) — the resolution algorithm
-  is defined in VH Log but DID URL syntax is defined in did:webvh
-- The DIDDoc as the `state` type — in VH Log, `state` is an arbitrary JSON object
-
-## Specification Tooling
-
-This spec uses [Spec-Up](https://github.com/decentralized-identity/spec-up) v0.11.6 (npm,
-official package — NOT the old `github:brianorwhatever/spec-up` fork) for rendering.
-
-```sh
-npm install
-npm run render   # render once
-npm run edit     # watch
-```
-
-The render scripts are `render.mjs` and `edit.mjs` in the repo root (ESM, required by spec-up
-v0.11.6). The `.npmrc` in the repo root sets `node-options=--dns-result-order=ipv4first` —
-this is required on machines where IPv6 is broken; it is safe to leave in place on machines
-where IPv6 works fine.
-
-External references not in spec-up's bundled specref data are defined per spec in a
-`spec_refs` array in `specs.json` (same entry format as the old fork's `external_specs`:
-`{ "name": { href, title, rawDate, authors, status } }`). The local plugin `spec-refs.mjs`
-merges them into the corpus used by `[[spec:NAME]]`. Do NOT use `external_specs` — in 0.11.6
-it only fetches other Spec-Up pages for `[[xref:]]` terms, and fetching non-Spec-Up pages
-produces huge jsdom CSS error dumps.
-
-Rendered output goes to `next/`, which is git-ignored (do not edit or commit it). The root
-`index.html` redirects to `next/`. On each push to `main`, the `render-specs` workflow renders
-the spec and publishes the whole working tree (minus `node_modules`) to the `gh-pages`
-branch, which GitHub Pages serves. Specialisations in other repos (e.g. did:vh) link to VH-Log with absolute
-URLs such as `https://swcurran.github.io/VH-Log/next/index.html#<anchor>` — renaming a heading
-here breaks those links.
-
-## Repository Structure
-
-```text
-spec/               # VH-Log specification source (Spec-Up Markdown)
-  header.md
-  abstract.md
-  overview.md
-  specification.md
-  security_and_privacy.md
-  definitions.md
-  references.md
-  version.md
-next/               # Rendered HTML output (git-ignored; do not edit directly)
-index.html          # Redirect to next/
-spec-refs.mjs       # Spec-Up plugin adding each spec's `spec_refs` to [[spec:]] lookups
-render.mjs          # ESM render script (node render.mjs)
-edit.mjs            # ESM watch script (node edit.mjs)
-specs.json          # Spec-Up configuration
-
-# Planned, not yet created (see Planned updates below):
-spec-eddsa-jcs-prerotation/  # eddsa-jcs-prerotation-2026 cryptosuite spec
-```
-
-## Key Concepts
-
-### Log Entry Structure
-
-Each entry in a VH Log contains:
-
-```json
-{
-  "versionId": "<entry-hash>",
-  "versionTime": "<ISO 8601 timestamp>",
-  "parameters": { ... },
-  "state": { ... },
-  "proof": [ ... ]
-}
-```
-
-- `versionId`: A hash of the entry content (excluding `proof`), base64url-encoded. For the
-  genesis entry, this value is used to derive the SCID.
-- `versionTime`: The claimed time of this entry. Monotonically increasing.
-- `parameters`: Configuration that takes effect from this entry onward. See Parameters section.
-- `state`: The versioned object at this point in the log. Type is defined by the specialisation.
-- `proof`: One or more Data Integrity proofs from authorised update keys (and optionally
-  witnesses).
-
-### SCID
-
-The Self-Certifying Identifier is derived from the `versionId` of the genesis entry (entry 0).
-It is embedded in the log's canonical identifier and allows a verifier to confirm that a given
-log is the authentic log for that identifier — not a substituted or forged alternative.
-
-### Parameters
-
-Parameters accumulate across entries (later entries override earlier ones). Key parameters:
-
-- `updateKeys`: The set of keys authorised to sign subsequent entries
-- `nextKeyHashes`: Pre-committed hashes of future update keys (enables key pre-rotation)
-- `witnesses`: The set of witness DIDs and the required threshold
-- `deactivated`: Boolean — if true, the log is deactivated and no further entries are valid
-- `ttl`: Suggested cache duration for resolvers
-
-### Resolution Algorithm
-
-Given a log and a target version (by `versionTime` or `versionId`), the resolver:
-
-1. Verifies the SCID against the genesis entry
-2. Processes entries in order, verifying each entry's proof and hash chain
-3. Accumulates parameters
-4. Returns the `state` from the latest entry at or before the target version
-
-### Witnesses and Watchers
-
-- **Witnesses**: External parties that sign log entries, providing additional tamper-evidence.
-  A threshold of witness proofs may be required per entry (governance-defined).
-- **Watchers**: Parties that archive log copies and can serve them independently of the
-  original publisher. Watcher copies are independently verifiable due to the cryptographic
-  chain.
+- **Spec-Up:** use the official npm package v0.11.6, NOT the old
+  `github:brianorwhatever/spec-up` fork. The render scripts are ESM because 0.11.6 needs
+  them. `katex` was removed from `specs.json` (unused; a 0.11.6 packaging bug leaves its
+  fonts missing).
+- **External references:** add them to `spec_refs` in `specs.json` (see README). Do NOT
+  use `external_specs`: in 0.11.6 it only fetches other Spec-Up pages for `[[xref:]]`
+  terms, and fetching non-Spec-Up pages produces huge jsdom CSS error dumps.
+- **`next/`** is rendered output and git-ignored: don't edit or commit it.
+- **Heading anchors:** did:vh (and later specialisations) link here by absolute anchor
+  URL. Before renaming a heading, check `/d2/repos/didvh/spec/` for links to it.
+- **Check after edits:** `npm run render`, then confirm every `href="#..."` in
+  `next/index.html` has a matching `id`, and that did:vh's links into VH-Log still
+  resolve.
 
 ## Authoring Guidelines
 
@@ -169,32 +47,28 @@ Given a log and a target version (by `versionTime` or `versionId`), the resolver
   management. Depends on all three specs.
 - **eddsa-jcs-prerotation-2026** (planned, hosted in this repo): Data Integrity cryptosuite
   extending eddsa-jcs-2022 to automate VH-Log's mandatory key pre-rotation. See Planned updates.
-- **did:vh** (repo <https://github.com/swcurran/didvh>, local clone `/d2/repos/didvh`,
-  published at <https://swcurran.github.io/didvh/>): the first specialisation of VH-Log —
-  similar to did:webvh but the DID is just `did:vh:<SCID>`. Split out of this repo on
-  2026-10-05; its design decisions and TODOs live in that repo's CLAUDE.md.
-- **did:webvh** (<https://identity.foundation/didwebvh/>): VH-Log was extracted from it; a
-  future did:webvh version is expected to be redefined as a VH-Log specialisation. A reworked
-  copy was briefly kept here as `spec-didwebvh/` and removed 2026-10-05.
+- **did:vh** and **did:webvh**: see README. did:vh's local clone is `/d2/repos/didvh`;
+  its design decisions and TODOs live in that repo's CLAUDE.md. did:vh was split out of
+  this repo on 2026-10-05. A reworked did:webvh copy was briefly kept here as
+  `spec-didwebvh/` and removed the same day.
 
 ## Current Work and Next Steps
 
 ### History
 
-- 2026-06-06: migrated Spec-Up from the old GitHub fork to npm v0.11.6; removed `katex`
-  from `specs.json` (unused; spec-up 0.11.6 packaging bug leaves its fonts missing).
+- 2026-06-06: migrated Spec-Up from the old GitHub fork to npm v0.11.6.
 - `spec/` reworked into the generalised VH-Log spec: DID-specific content stripped,
   `did.jsonl` replaced with `vh-log.jsonl`, DIDDoc replaced with the generic `state` object,
   header status "Pre-Draft — Editors Draft v0.1".
 - 2026-10-05: did:vh moved to its own repo; the did:webvh copy removed; repo cleaned up for
   GitHub Pages publishing.
 
-### Open inconsistency
+### Version parameter (resolved 2026-10-07)
 
-- `spec/version.md` says the did:webvh `method` parameter is replaced in VH-Log by
-  `logVersion` (`vh-log:1.0`), while did:vh describes its `method` parameter
-  (`did:vh:1.0`) as implying the VH-Log base version. Check the spec body and make the two
-  agree.
+`logVersion` is VH-Log's version parameter. A specialisation MAY designate its own
+parameter in its place (did:webvh and did:vh use `method`); then `logVersion` MUST
+NOT appear, and each specialisation value states the VH-Log version it implies.
+This keeps existing did:webvh logs (`method: did:webvh:1.0`) valid.
 
 ### Planned updates (agreed 2026-09-16)
 
@@ -223,7 +97,3 @@ Given a log and a target version (by `versionTime` or `versionId`), the resolver
    still references did:webvh for resolution metadata, the DID-to-HTTPS transformation (`src`
    web locations), witness `did:key` rules, and `#files`/`#whois` dereferencing — candidates
    to move. (Version selection already moved here 2026-10-04 as "Selecting a Version".)
-
-## Status
-
-Pre-draft. Do not implement against this spec until it reaches Draft status.
