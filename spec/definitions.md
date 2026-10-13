@@ -211,7 +211,8 @@ standard, best practices are documented in [[spec:rfc8030]].
 [[def: witness, witnesses, witnessed]]
 
 ~ Witnesses are participants in the process of approving a new [[ref: log entry]]
-before it is published. A witness receives from the [[ref: Log Controller]] a
+before it is published. A witness receives from the [[ref: Log Controller]], or
+for an [[ref: editor entry]] from the [[ref: editor]], a
 [[ref: log entry]] ready for publication, verifies it according to this
 specification, and approves it according to the governance of the ecosystem. If
 the verification and approval are positive, the witness returns a

@@ -88,7 +88,7 @@ algorithm in this specification.
    witness must be unique.
 
 2. **Pre-rotation active but `updateKeys` omitted.** If entry N-1 commits
-   `nextKeyHashes: ["H1","H2"]`, then entry N must contain an explicit
+   `nextKeyHashes: ["H1","H2"]`, then a [[ref: controller entry]] N must contain an explicit
    `updateKeys` whose every member hashes to a value in `["H1","H2"]`. An
    entry N omitting `updateKeys` (intending to inherit) is invalid.
 
@@ -105,9 +105,8 @@ algorithm in this specification.
    [[ref: editor entry]] **MUST** have `parameters` equal to `{}`, so the entry
    is rejected.
 
-6. **Newly added editor key used too early.** Entry N, a
-   [[ref: controller entry]], sets `editorKeys: ["E1"]`, and entry N is itself
-   signed by `E1`. A change to `editorKeys` takes effect only from the next
+6. **Newly added editor key used too early.** Entry N sets
+   `editorKeys: ["E1"]` and is signed only by `E1`. A change to `editorKeys` takes effect only from the next
    entry, so `E1` is not an authorized key for entry N.
 
 :::
@@ -622,8 +621,8 @@ witnessed]] (if necessary), appended to the existing log file, and published:
    in [Authorized Keys](#authorized-keys), with `proofPurpose` set to
    `assertionMethod`.
 7. If [[ref: Key Pre-Rotation]] is being used, the hash of all `updateKeys`
-   entries **MUST** match a hash in `nextKeyHashes` from the previous [[ref: log entry]],
-   as defined in
+   entries **MUST** match a hash in the previously active `nextKeyHashes` (that
+   of the most recent [[ref: controller entry]]), as defined in
    [Pre-Rotation Key Hash Generation and Verification](#pre-rotation-key-hash-generation-and-verification).
 8. Add the proof JSON object as the value of the `proof` property.
 9. Serialise the entry as a [[ref: JSON Line]] by removing extra whitespace and
@@ -851,10 +850,11 @@ The following lists the [[ref: parameters]], their data types, and enumerated va
   - Once set to a non-empty array, [[ref: Key Pre-Rotation]] is active. While
     active, **both** `nextKeyHashes` **AND** `updateKeys` **MUST** be present as
     explicit properties in every subsequent [[ref: controller entry]] until pre-rotation
-    is deactivated (by setting `nextKeyHashes` to `[]`). A subsequent entry that
-    omits `updateKeys` **MUST** be rejected by [[ref: Resolvers]], even if the
-    omission would otherwise inherit the previous value. Inheritance of
-    `updateKeys` is **never** permitted while pre-rotation is active.
+    is deactivated (by setting `nextKeyHashes` to `[]`). A subsequent
+    [[ref: controller entry]] that omits `updateKeys` **MUST** be rejected by
+    [[ref: Resolvers]], even if the omission would otherwise inherit the
+    previous value. Inheritance of `updateKeys` by a [[ref: controller entry]]
+    is **never** permitted while pre-rotation is active.
   - While [[ref: Key Pre-Rotation]] is active, **every** [[ref: multikey]] in
     the current [[ref: controller entry]]'s `updateKeys` **MUST** have its hash
     in the previously active `nextKeyHashes`. [[ref: Editor entries]] do not
@@ -867,8 +867,11 @@ The following lists the [[ref: parameters]], their data types, and enumerated va
   corresponding private keys are authorized to sign [[ref: editor entries]],
   which change only the [[ref: state]] object. See the
   [Editor Keys](#editor-keys) section for details.
-  - **MUST NOT** appear unless the active [[ref: logVersion]] is `vh-log:1.1`,
-    or a value of a designated version parameter that implies `vh-log:1.1`.
+  - **MUST NOT** appear unless the active [[ref: logVersion]], including a
+    value set in the same [[ref: log entry]], is `vh-log:1.1` or later, or a
+    value of a designated version parameter that implies `vh-log:1.1` or
+    later. [[ref: Resolvers]] **MUST** reject a [[ref: log entry]] that
+    includes `editorKeys` when the active version does not permit it.
   - Defaults to `[]` if not set in the first [[ref: log entry]], meaning the
     log has no [[ref: editors]].
   - If not set in other entries, retained from the most recent prior value.
@@ -1091,7 +1094,9 @@ storage and **MUST NOT** appear in the log, the witness file, or any other
 published resource.
 
 The authorized verification keys are the [[ref: multikey]]-formatted public keys
-in the **active** `updateKeys` list from the `parameters` property. Any of the
+in the **active** `updateKeys` list from the `parameters` property for a
+[[ref: controller entry]], or in the **active** `editorKeys` list for an
+[[ref: editor entry]]. Any of the
 authorized verification keys may be referenced in the [[ref: Data Integrity]]
 proof.
 
@@ -1123,7 +1128,7 @@ signed by the keys from the **current** entry.
 #### Pre-Rotation Key Hash Generation and Verification
 
 Pre-rotation requires a [[ref: Log Controller]] to commit to the authorization
-keys that will be used in the next [[ref: log entry]], without exposing those
+keys that will be used in the next [[ref: controller entry]], without exposing those
 actual public keys. The purpose is that if the currently authorized keys are
 compromised, the attacker cannot rotate to new keys they control, because the
 next keys were already committed. Assuming the attacker has not also compromised
@@ -1154,7 +1159,7 @@ authorization key:
 4. Insert the calculated hash into the `nextKeyHashes` array within the
    [[ref: parameters]] property.
 5. The generated key pair **SHOULD** be safely stored so that it can be used in
-   the next [[ref: log entry]].
+   the next [[ref: controller entry]].
 
 A [[ref: Log Controller]] **MAY** include extra hashes in `nextKeyHashes` that
 are not subsequently used. Unused hashes are ignored.
@@ -1228,9 +1233,16 @@ The following rules apply to `editorKeys`:
    **MUST NOT** appear in both the most recent `updateKeys` value and the most
    recent `editorKeys` value. A [[ref: Resolver]] **MUST** reject a
    [[ref: controller entry]] after which a [[ref: multikey]] appears in both.
-6. A [[ref: Log Controller]] **SHOULD NOT** use, as an [[ref: editor key]], a
-   key that is or has been an [[ref: update key]], or whose hash is or has
-   been in `nextKeyHashes`.
+6. After each [[ref: controller entry]] is processed, the hash (computed per
+   [Pre-Rotation Key Hash Generation and Verification](#pre-rotation-key-hash-generation-and-verification))
+   of a [[ref: multikey]] in the most recent `editorKeys` value **MUST NOT**
+   appear in the most recent `nextKeyHashes` value. A [[ref: Resolver]]
+   **MUST** reject a [[ref: controller entry]] after which such a hash
+   appears. Otherwise, under [[ref: pre-rotation]], the holder of an
+   [[ref: editor key]] could sign the next [[ref: controller entry]] with it.
+   A [[ref: Log Controller]] **SHOULD NOT** use, as an [[ref: editor key]], a
+   key that is or has been an [[ref: update key]], or whose hash has been in
+   `nextKeyHashes`.
 7. [[ref: Editor entries]] are [[ref: witnessed]] under the active `witness`
    [[ref: parameter]], exactly as [[ref: controller entries]] are. A
    [[ref: Log Controller]] that sets `editorKeys` to a non-empty list
@@ -1256,8 +1268,8 @@ follows:
 1. If the entry is the first [[ref: log entry]], it is a
    [[ref: controller entry]], and is verified as defined in
    [Authorized Keys](#authorized-keys).
-2. If every proof in the entry's `proof` array passes the checks in
-   [Authorized Keys](#authorized-keys) against the active `updateKeys`, the
+2. If the entry's `proof` array is non-empty and every proof in it passes the
+   checks in [Authorized Keys](#authorized-keys) against the active `updateKeys`, the
    entry is a [[ref: controller entry]]. While [[ref: pre-rotation]] is active,
    the active `updateKeys` for this check is the entry's own
    `parameters.updateKeys`; an entry that does not include it does not pass
@@ -1265,8 +1277,8 @@ follows:
    [Read (Resolve)](#read-resolve), including the [[ref: pre-rotation]] check
    in step 7.
 3. Otherwise, if the active `editorKeys` (as defined in
-   [Editor Keys](#editor-keys)) is non-empty, and every proof in the entry's
-   `proof` array passes the checks in [Authorized Keys](#authorized-keys) with
+   [Editor Keys](#editor-keys)) is non-empty, the entry's `proof` array is
+   non-empty, and every proof in it passes the checks in [Authorized Keys](#authorized-keys) with
    the active `editorKeys` in place of the active `updateKeys`, the entry is an
    [[ref: editor entry]]. Then:
    1. The entry's `parameters` **MUST** be the empty JSON object `{}`. An
@@ -1283,8 +1295,9 @@ follows:
    proof by an [[ref: update key]] and another by an [[ref: editor key]]
    passes neither step 2 nor step 3, and is rejected.
 
-Because rule 5 in [Editor Keys](#editor-keys) keeps the active `updateKeys`
-and `editorKeys` disjoint, the key that signs an entry determines which of
+Because rules 5 and 6 in [Editor Keys](#editor-keys) keep the active
+`updateKeys` and `editorKeys` disjoint, including under
+[[ref: pre-rotation]], the key that signs an entry determines which of
 steps 2 and 3 applies. Without [[ref: pre-rotation]], an entry with
 `parameters` `{}` signed by an [[ref: update key]] is a
 [[ref: controller entry]], as it is in a log without [[ref: editors]].
@@ -1325,14 +1338,29 @@ The requirements in [Update](#update) that each party extend only the most
 recently published log, and never sign or publish two entries with the same
 predecessor, avoid most forks. They cannot prevent two [[ref: editors]], each
 working from the same published log, from creating competing entries at the
-same time. [[ref: Witnesses]] resolve this: a [[ref: witness]] **MUST NOT**
-approve more than one [[ref: log entry]] with the same predecessor (see
+same time. [[ref: Witnesses]] limit the effect: a [[ref: witness]] approves
+at most one [[ref: editor entry]] with a given predecessor (see
 [Witnessing a Log Entry Update](#witnessing-a-log-entry-update)), so when the
 [[ref: threshold]] is a majority of the [[ref: witnesses]], at most one of the
-competing entries can be [[ref: witnessed]]. An entry that cannot be
-[[ref: witnessed]] **MUST NOT** be published. An [[ref: editor]] whose entry
-is not [[ref: witnessed]] **MAY** create a new entry that extends the
-[[ref: witnessed]] one.
+competing [[ref: editor entries]] can be [[ref: witnessed]]. As for any entry,
+an entry that cannot be [[ref: witnessed]] is not published (see
+[Update](#update)). An [[ref: editor]] whose entry is not [[ref: witnessed]]
+**MAY** create a new entry that extends the [[ref: witnessed]] one.
+
+Competing [[ref: editor entries]] can also split the [[ref: witnesses]]'
+approvals so that none of them reaches the [[ref: threshold]]. This happens
+by accident when two [[ref: editors]] reach different [[ref: witnesses]]
+first, and an [[ref: editor]] can cause it deliberately by giving each
+[[ref: witness]] a different entry. Because a [[ref: witness]] never approves
+a second [[ref: editor entry]] with the same predecessor, no
+[[ref: editor entry]] can then extend the log. The [[ref: Log Controller]]
+recovers by creating a [[ref: controller entry]] with the same predecessor,
+for example one that removes the [[ref: editor]] from `editorKeys`. A
+[[ref: witness]] that approved one of the competing [[ref: editor entries]]
+can still approve the [[ref: controller entry]], provided that it finds no
+published entry with that predecessor. After approving it, the
+[[ref: witness]] approves no further [[ref: editor entry]] with that
+predecessor.
 
 Without [[ref: witnesses]], nothing stops an [[ref: editor]] from giving
 different parties entries that extend the same predecessor, and so making the
@@ -1482,7 +1510,7 @@ and for verifying witness proofs is defined by the [[ref: specialisation]].
 
 A valid proof from a [[ref: witness]] carries the implication that **ALL** prior
 [[ref: log entries]] are also approved by that witness. To maintain a manageable
-witness file size, the [[ref: Log Controller]] **SHOULD** remove older proofs for
+witness file size, the party publishing the log **SHOULD** remove older proofs for
 **published** [[ref: log entries]], keeping only the latest proof for each witness.
 
 To eliminate the race condition in publishing the log file and witness file, when
@@ -1496,37 +1524,52 @@ To avoid unnecessary clutter in the witness file, array entries without proofs
 (containing only the `versionId`) **SHOULD** be removed.
 
 A witness file **MUST NOT** contain proofs for two different `versionId`s with
-the same version number. When adding proofs to the witness file, a
-[[ref: Log Controller]] **MUST** reject any proof for a `versionId` that
+the same version number. When adding proofs to the witness file, the party
+publishing the log **MUST** reject any proof for a `versionId` that
 conflicts in this way with the log it is publishing.
 
 ##### Witnessing a Log Entry Update
 
-The following process is used to witness a log entry update:
+The following process is used to witness a log entry update. In this section,
+the *submitter* is the party that created the candidate entry: the
+[[ref: Log Controller]] for a [[ref: controller entry]], or the
+[[ref: editor]] for an [[ref: editor entry]].
 
-- The [[ref: Log Controller]] prepares the full [[ref: log entry]] (including the
+- The submitter prepares the full [[ref: log entry]] (including the
   `proof` element) for the new version, and shares it with the active [[ref:
   witnesses]]. The specification leaves to implementers how the [[ref: log entry]]
   data is provided to the [[ref: witnesses]].
 - Each [[ref: witness]] **MUST** hold its own copy of the published log file prior
-  to witnessing, and **MUST** confirm that the controller-supplied candidate entry
+  to witnessing, and **MUST** confirm that the submitted candidate entry
   verifies as the next entry to that log.
 - Each [[ref: witness]] **MUST** independently verify the candidate entry using
   every step in [Read (Resolve)](#read-resolve). Any failure **MUST** cause the
   witness to refuse approval.
 - A [[ref: witness]] **MUST NOT** approve more than one [[ref: log entry]] with
-  the same predecessor.
+  the same predecessor, except as follows, so that competing
+  [[ref: editor entries]] cannot stop the [[ref: Log Controller]] from
+  updating the log (see
+  [Concurrent Editor Entries](#concurrent-editor-entries)):
+  - A [[ref: witness]] that has approved an [[ref: editor entry]] **MAY**
+    also approve one [[ref: controller entry]] with the same predecessor.
+    Before doing so, it **MUST** retrieve the latest published log, and
+    **MUST NOT** approve the [[ref: controller entry]] if the published log
+    contains any [[ref: log entry]] with that predecessor.
+  - A [[ref: witness]] **MUST NOT** approve more than one
+    [[ref: editor entry]], or more than one [[ref: controller entry]], with
+    the same predecessor.
+  - A [[ref: witness]] that has approved a [[ref: controller entry]] **MUST
+    NOT** approve an [[ref: editor entry]] with the same predecessor.
 - Each [[ref: witness]] determines (based on the governance of the ecosystem)
   if they approve of the update.
 - If the verification is successful and approval is granted, the [[ref: witness]]
-  creates and sends to the [[ref: Log Controller]] a [[ref: Data Integrity]] proof
+  creates and sends to the submitter a [[ref: Data Integrity]] proof
   signed using the witness's key. The specification leaves to implementers how
-  [[ref: witness]] proofs are sent to the [[ref: Log Controller]].
-- The [[ref: Log Controller]] **MUST** add the proof to the record for the
-  applicable `versionId` in the witness file.
-  - The [[ref: Log Controller]] **MAY** publish the updated witness file as new
-    proofs are added.
-  - The [[ref: Log Controller]] **MUST** publish the updated witness file
+  [[ref: witness]] proofs are sent to the submitter.
+- The submitter, or the party publishing the log on its behalf, **MUST** add
+  the proof to the record for the applicable `versionId` in the witness file.
+  - The updated witness file **MAY** be published as new proofs are added.
+  - The updated witness file **MUST** be published
     **after** a [[ref: threshold]] of proofs have been received and **before** the
     witnessed log file is published.
 

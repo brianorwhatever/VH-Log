@@ -124,11 +124,30 @@ The following classes of attack apply to all log operations:
       the log. [[ref: Witnesses]] are the defence: a [[ref: witness]] that has
       approved the revoking entry does not approve a second entry with the
       same predecessor ([Witnessing a Log Entry
-      Update](#witnessing-a-log-entry-update)), so the backdated entry cannot
-      be [[ref: witnessed]]. Without [[ref: witnesses]], a [[ref: Resolver]]
-      that is shown only the backdated copy accepts it; comparing copies
-      ([Comparing Copies of a Log](#comparing-copies-of-a-log)) detects the
-      fork.
+      Update](#witnessing-a-log-entry-update)), so when the
+      [[ref: threshold]] is a majority of the [[ref: witnesses]], the
+      backdated entry cannot be [[ref: witnessed]]. Without
+      [[ref: witnesses]], a [[ref: Resolver]] that is shown only the backdated
+      copy accepts it, and comparing copies ([Comparing Copies of a
+      Log](#comparing-copies-of-a-log)) detects the fork. Revocation does not
+      remove this ability: the backdated entry remains valid indefinitely, so
+      any [[ref: Resolver]] that sees it alongside the published log fails
+      resolution for every version of the log.
+    - **Splitting witness approvals.** Competing [[ref: editor entries]]
+      can split the [[ref: witnesses]]' approvals so that no entry reaches
+      the [[ref: threshold]]. The [[ref: Log Controller]] can still update
+      the log, because a [[ref: witness]] may approve a
+      [[ref: controller entry]] after approving an [[ref: editor entry]] with
+      the same predecessor ([Witnessing a Log Entry
+      Update](#witnessing-a-log-entry-update)). There is a race: if one of the
+      [[ref: editor entries]] has in fact reached the [[ref: threshold]] but
+      is not yet published, and the [[ref: Log Controller]] obtains a
+      [[ref: threshold]] for its own entry, two [[ref: witnessed]] entries
+      with the same predecessor exist. If both are published, the log is
+      forked and fails resolution ([Comparing Copies of a
+      Log](#comparing-copies-of-a-log)). A [[ref: Log Controller]] reduces
+      this risk by checking the published log, and the [[ref: editors]], for
+      a [[ref: witnessed]] entry before creating its own.
     - **Forking to deny resolution.** Without [[ref: witnesses]], an
       [[ref: editor]] can deliberately give different parties entries with the
       same predecessor, and any [[ref: Resolver]] that sees more than one
