@@ -6,12 +6,40 @@
 encoding. Used in VH-Log for encoding hashes for [[ref: SCIDs]] and
 [[ref: entry hashes]].
 
+[[def: controller entry, controller entries]]
+
+~ A [[ref: log entry]] authorised by an [[ref: update key]], as defined in
+[Authorized Keys](#authorized-keys). Only a controller entry can change the
+[[ref: parameters]] of a [[ref: log]], including deactivating it.
+
 [[def: Data Integrity]]
 
 ~ [W3C Data Integrity](https://www.w3.org/community/reports/credentials/CG-FINAL-data-integrity-20220722/)
 is a specification of mechanisms for ensuring the authenticity and integrity of
 structured digital documents using cryptography, such as digital signatures and
 other digital mathematical proofs.
+
+[[def: editor, editors]]
+
+~ A party, other than the [[ref: Log Controller]], that holds the private key
+for an [[ref: editor key]] and so can add [[ref: editor entries]] to a
+[[ref: log]] without the [[ref: Log Controller]] taking part.
+
+[[def: editor entry, editor entries]]
+
+~ A [[ref: log entry]] authorised by an [[ref: editor key]] rather than an
+[[ref: update key]]. An editor entry changes only the [[ref: state]] object;
+its `parameters` is the empty object `{}`. Every other [[ref: log entry]] is a
+[[ref: controller entry]].
+
+[[def: editor key, editor keys, editorKeys]]
+
+~ [[ref: Multikey]]-formatted public keys whose corresponding private keys are
+authorised to sign [[ref: editor entries]], which change only the
+[[ref: state]] object. Editor keys cannot change any [[ref: parameter]],
+including the [[ref: update keys]] or the editor keys themselves. The active
+set of editor keys is defined by the `editorKeys` [[ref: parameter]]. See
+[Editor Keys](#editor-keys).
 
 [[def: Entry Hash, entry hashes]]
 
@@ -95,7 +123,7 @@ supports many hash algorithms, for interoperability, [[ref: Log Controllers]]
 
 ~ The `nextKeyHashes` [[ref: parameter]]: an array of hashes of [[ref: multikey]]
 formatted public keys that the [[ref: Log Controller]] commits to using as
-[[ref: update keys]] in the next [[ref: log entry]], enabling the [[ref:
+[[ref: update keys]] in the next [[ref: controller entry]], enabling the [[ref:
 Pre-Rotation]] feature.
 
 [[def: parameters, parameter]]
