@@ -1196,7 +1196,8 @@ An [[ref: editor entry]] changes only the [[ref: state]] object. Every change
 to the [[ref: parameters]] — including adding, removing or replacing
 `updateKeys`, `nextKeyHashes` or `editorKeys`, changing `witness`, `watchers`
 or `ttl`, upgrading the [[ref: logVersion]], or deactivating the log —
-requires a [[ref: controller entry]].
+requires a [[ref: controller entry]]. This includes [[ref: parameters]],
+such as `ttl` and `watchers`, that do not affect who controls the log.
 
 The [[ref: update keys]] cannot be used to limit what a key may sign: every
 key in the active `updateKeys` has full control of the log, and
@@ -1221,6 +1222,8 @@ The following rules apply to `editorKeys`:
 4. Revoking an [[ref: editor key]] is done by a [[ref: controller entry]] that
    sets `editorKeys` to a list that does not include it. An
    [[ref: editor]] cannot revoke an [[ref: editor key]], including its own.
+   [[ref: Editor keys]] do not expire: an [[ref: editor key]] remains
+   authorized until a [[ref: controller entry]] removes it.
 5. After each [[ref: controller entry]] is processed, a [[ref: multikey]]
    **MUST NOT** appear in both the most recent `updateKeys` value and the most
    recent `editorKeys` value. A [[ref: Resolver]] **MUST** reject a
@@ -1233,27 +1236,6 @@ The following rules apply to `editorKeys`:
    [[ref: Log Controller]] that sets `editorKeys` to a non-empty list
    **SHOULD** also use [[ref: witnesses]], for the reasons given in
    [Concurrent Editor Entries](#concurrent-editor-entries).
-
-::: issue Parameters an editor may change
-
-This draft does not let an [[ref: editor entry]] change any
-[[ref: parameter]]. Some [[ref: parameters]], such as `ttl` and `watchers`, do
-not affect who controls the log. Should an [[ref: editor]] be allowed to
-change them? `witness` affects how the log is protected, so changing it
-probably needs a [[ref: controller entry]].
-
-:::
-
-::: issue Expiry of editor keys
-
-An [[ref: editor key]] remains authorized until a [[ref: controller entry]]
-removes it, so a [[ref: Log Controller]] that stays offline cannot end an
-[[ref: editor]]'s authority. Should `editorKeys` support an expiry, such as a
-time or version number after which a key can no longer sign? A time-based
-expiry would depend on `versionTime`, which is asserted by the signer, so it
-would only be reliable with [[ref: witnesses]].
-
-:::
 
 ::: issue Requiring witnesses with editors
 
