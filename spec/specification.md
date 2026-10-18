@@ -763,7 +763,9 @@ The following lists the [[ref: parameters]], their data types, and enumerated va
   corresponding private keys are authorized to sign log entries that update the
   log. See the [Authorized Keys](#authorized-keys) section for details.
   - **MUST** appear in the first [[ref: log entry]] and **MAY** appear in
-    subsequent entries.
+    subsequent entries, except in a log whose keys come from a controller,
+    where it **MUST NOT** appear. See
+    [Keys from a Controller](#keys-from-a-controller).
   - If not present in later [[ref: log entries]], the previous value continues
     to apply.
   - A key from the active `updateKeys` array **MUST** be used to authorize each
@@ -991,7 +993,9 @@ where, at minimum:
 2. `cryptosuite` **MUST** be one permitted by the active [[ref: logVersion]].
 3. `proofPurpose` is `assertionMethod`,
 4. `verificationMethod` resolves to a [[ref: multikey]] that appears verbatim in
-   the **active** `updateKeys`.
+   the **active** `updateKeys`, or, for a log whose keys come from a
+   controller, to a key authorized as defined in
+   [Keys from a Controller](#keys-from-a-controller).
 
 [[ref: Resolvers]] **MUST** reject an entry whose proof fails *any* check. A
 structurally-valid signature over a different cryptosuite than allowed by the
@@ -1016,7 +1020,9 @@ For the first [[ref: log entry]], the **active** `updateKeys` is the one defined
 in that first entry.
 
 A [[ref: Resolver]] **MUST** verify that the key used for signing each [[ref:
-log entry]] is one from the list of active `updateKeys`. If not, terminate the
+log entry]] is one from the list of active `updateKeys`, or, for a log whose
+keys come from a controller, one authorized as defined in
+[Keys from a Controller](#keys-from-a-controller). If not, terminate the
 resolution process with an error.
 
 The **active** `updateKeys` for subsequent entries depends on whether [[ref:
@@ -1033,6 +1039,50 @@ is signed by the keys from the **previous** entry.
 For all subsequent entries, the **active** list is the `updateKeys` from the
 **current** [[ref: log entry]] to be verified. Thus, each [[ref: log entry]] is
 signed by the keys from the **current** entry.
+
+##### Keys from a Controller
+
+A [[ref: specialisation]] **MAY** define that the authorized keys for a log
+come from a controller with its own verifiable history, such as a DID whose
+DID Document lists verification methods, in place of `updateKeys`. A
+controller can then rotate its keys once, in its own history, without an entry
+in every log it controls. A [[ref: specialisation]] that does so **MUST**:
+
+- Designate its own version parameter, as described for [[ref: logVersion]] in
+  [VH-Log Parameters](#vh-log-parameters), and the value in the log's first
+  entry **MUST** identify a version of the specialisation that defines the
+  controller. A [[ref: Resolver]] that does not implement the
+  [[ref: specialisation]] then rejects the log rather than ignoring the
+  controller.
+- Fix the controller in the first [[ref: log entry]], and define whether, and
+  by which kind of entry, it can change.
+- Define how each [[ref: log entry]] identifies the version of the
+  controller's history it relies on. That version **MUST NOT** be earlier than
+  the one the previous entry relies on.
+- Define which keys of that controller version are authorized, and how a
+  proof's `verificationMethod` identifies one. Each authorized key **MUST** be
+  representable as a [[ref: multikey]], and the proof is verified with it as
+  defined in this section.
+- Define how a [[ref: Resolver]] obtains and verifies the controller's
+  history. A [[ref: Resolver]] that cannot do so **MUST** terminate resolution
+  with an error, and **MUST NOT** fall back to trusting the key in the proof.
+- Define how a key removed from the controller is kept from adding entries.
+  Because an entry names the controller version it relies on, a removed key
+  can sign an entry that relies on an earlier version. The
+  [[ref: specialisation]] **MUST** state whether [[ref: witnesses]], or an
+  external ordering such as an authoritative source, check entries against
+  the controller's latest state, and how a [[ref: Resolver]] reports entries
+  that neither checks.
+
+For such a log:
+
+- `updateKeys` and `nextKeyHashes` **MUST NOT** be set, and
+  [[ref: Key Pre-Rotation]] does not apply. The controller's own history
+  protects its keys.
+- A deactivating entry sets `deactivated` to `true` and is signed by an
+  authorized key.
+- [[ref: Witnesses]] verify each entry against the controller as part of
+  [Read (Resolve)](#read-resolve), like any other step.
 
 #### Pre-Rotation Key Hash Generation and Verification
 
