@@ -74,6 +74,10 @@ section. Decoding **MUST** be deterministic, so that every
 - [[ref: SCID]] generation, [[ref: entry hash]] generation and proofs are
   computed and verified over the decoded JSON [[ref: log entries]], exactly as
   for a log file. The encoding plays no part in verification.
+- Decoding an entry **MAY** depend on earlier entries, as when an encoded
+  entry holds only the changes from the entry before it. The
+  [[ref: specialisation]] **MUST** define which earlier entries decoding uses,
+  and those entries **MUST** be decoded and verified first.
 - A [[ref: Resolver]] **MUST** reject an encoded entry that cannot be decoded,
   or that decodes to an invalid [[ref: log entry]].
 - Wherever this specification requires a log file in [[ref: JSON Lines]]
