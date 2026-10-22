@@ -1084,6 +1084,40 @@ For such a log:
 - [[ref: Witnesses]] verify each entry against the controller as part of
   [Read (Resolve)](#read-resolve), like any other step.
 
+###### Editors from a Controller
+
+The [[ref: specialisation]] **MAY** also let the controller authorize
+editors: other identities, each with its own verifiable history like the
+controller's, whose entries may change only the [[ref: state]]. This serves
+the same purpose as `editorKeys` for a log with `updateKeys`, for a log whose
+keys come from a controller, and it names editors by identity rather than by
+key, so an editor rotates its keys in its own history. A
+[[ref: specialisation]] that does so **MUST**:
+
+- Define where the current editors are recorded, which **MUST** be in a
+  [[ref: log entry]] that only the controller can sign, and define that an
+  entry is checked against the editors recorded in the entry before it, so
+  adding or removing an editor takes effect from the next entry.
+- Define how an entry identifies its signer as an editor, and apply to each
+  editor the same rules as above for the controller: the version of its
+  history the entry relies on, which keys are authorized, how its history is
+  obtained and verified, and how a removed key is kept from adding entries.
+- Define any further limit on what an editor may change in the
+  [[ref: state]], such as particular members only.
+
+An entry signed by an editor:
+
+- **MUST** have empty `parameters`, so it cannot change keys, editors,
+  witnesses, the version parameter or deactivation, and a
+  [[ref: Resolver]] **MUST** reject an editor entry that sets any parameter.
+- **MUST NOT** be the first [[ref: log entry]].
+- **MUST** be signed by exactly one authorized key of that editor, and
+  **MUST NOT** also carry a proof by the controller.
+
+Editors do not change how forks are handled: two entries with the same
+predecessor are a fork whoever signed them, as described in
+[Comparing Copies of a Log](#comparing-copies-of-a-log).
+
 #### Pre-Rotation Key Hash Generation and Verification
 
 Pre-rotation requires a [[ref: Log Controller]] to commit to the authorization
